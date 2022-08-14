@@ -43,18 +43,17 @@ class DataStream:
 		self.flush()
 	
 	
-	def get_dataset_path(self, file_name = ""):
+	def get_dataset_path(self, *args):
 		
 		"""
 			Returns dataset full path
 		"""
 		
-		if file_name == "":
-			return os.path.join(self.dataset_name)
-		return os.path.join(self.dataset_name, file_name)
+		return os.path.join(self.dataset_name, *args)
 	
 	
-	def list_files(self, path="", recursive=True):
+	
+	def list_files(self, *args, recursive=True):
 	
 		"""
 			Returns files in folder
@@ -79,7 +78,7 @@ class DataStream:
 			return res
 		
 		try:
-			dir_name = self.get_dataset_path(path)
+			dir_name = self.get_dataset_path(*args)
 			
 			items = read_dir( dir_name, recursive )
 				
@@ -94,13 +93,13 @@ class DataStream:
 		return items
 	
 	
-	def list_dirs(self, path=""):
+	def list_dirs(self, *args):
 		
 		"""
 			Returns dirs in folder
 		"""
 		
-		dir_name = self.get_dataset_path(path)
+		dir_name = self.get_dataset_path(*args)
 		
 		try:
 			items = os.listdir(dir_name)

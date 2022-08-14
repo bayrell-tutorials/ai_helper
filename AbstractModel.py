@@ -16,7 +16,6 @@ class AbstractModel:
 		
 		self.dataset = None
 		self.model_name = os.path.join("data", "model")
-		self.model_number = 1
 		self.input_shape = None
 		self.output_shape = None
 		
@@ -27,7 +26,7 @@ class AbstractModel:
 			Returns model name
 		"""
 		
-		return os.path.join(self.model_name, str(self.model_number))
+		return self.model_name
 	
 	
 	def get_model_path(self):
@@ -36,7 +35,7 @@ class AbstractModel:
 			Returns model path
 		"""
 		
-		return os.path.join(self.model_name, str(self.model_number))
+		return self.model_name
 		
 	
 	def set_dataset(self, dataset: DataSet):

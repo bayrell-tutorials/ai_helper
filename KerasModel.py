@@ -9,8 +9,6 @@
 import os, math
 
 import numpy as np
-import tensorflow as tf
-import tensorflow.keras as keras
 import matplotlib.pyplot as plt
 
 from .AbstractModel import AbstractModel
@@ -99,6 +97,8 @@ class KerasModel(AbstractModel):
 			Load model from file
 		"""
 		
+		import tensorflow.keras as keras
+		
 		model_path = self.get_model_path()
 		model_file_path = model_path + '.h5'
 		
@@ -115,6 +115,8 @@ class KerasModel(AbstractModel):
 		"""
 			Show model info
 		"""
+		
+		import tensorflow.keras as keras
 		
 		self.create_model_parent_dir()
 		model_path = self.get_model_path()
@@ -134,6 +136,8 @@ class KerasModel(AbstractModel):
 		"""
 			Train model
 		"""
+		
+		import tensorflow.keras as keras
 		
 		model_path = self.get_model_path()
 		checkpoint_path = os.path.join(model_path, "training", "cp.ckpt")
