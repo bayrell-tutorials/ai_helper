@@ -11,14 +11,14 @@ import os, math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .AbstractModel import AbstractModel
+from .AbstractNetwork import AbstractNetwork
 
 
-class KerasModel(AbstractModel):
+class KerasModel(AbstractNetwork):
 	
 	def __init__(self):
 		
-		AbstractModel.__init__(self)
+		AbstractNetwork.__init__(self)
 		
 		self._is_new = True
 		self.model = None
@@ -36,14 +36,6 @@ class KerasModel(AbstractModel):
 		
 		return self.model != None
 	
-	
-	def is_new(self):
-		
-		"""
-			Returns true if model is loaded
-		"""
-		
-		return self._is_new
 	
 	
 	def create(self):
@@ -207,37 +199,6 @@ class KerasModel(AbstractModel):
 		plt.savefig(model_path + '_history.png')
 		plt.show()
 		
-	
-	def check(self, control_dataset, callback=None):
-		
-		"""
-			Check model
-		"""
-		
-		vector_x = control_dataset.get_x()
-		vector_y = control_dataset.get_y()
-		
-		# Predict
-		vector_answer = self.predict( vector_x )
-		
-		# Output answers
-		correct_answers = 0
-		total_questions = len(vector_x)
-		
-		for i in range(0, total_questions):
-			
-			if callback != None:
-				correct = callback(
-					question = vector_x[i],
-					answer = vector_answer[i],
-					control = vector_y[i],
-				)
-				if correct:
-					correct_answers = correct_answers + 1
-		
-		return correct_answers, total_questions
-	
-	
 	
 	def predict(self, vector_x):
 		

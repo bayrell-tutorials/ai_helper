@@ -132,7 +132,7 @@ class DataSet:
 		return output_shape
 		
 		
-	def get_build_train_shape(self):
+	def get_train_shape(self):
 		
 		"""
 			Returns train shape
