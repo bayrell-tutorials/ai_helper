@@ -16,7 +16,9 @@ class DirectModule(Module):
 		self._links_none = []
 		self._links_next = {}
 		self._links_prev = {}
-		self._output_value = ""
+		self._last_module_name = ""
+		self._output_module_name = ""
+		self._module_inc = 1
 
 
 	def set_output_module(self, module_name):
@@ -24,7 +26,7 @@ class DirectModule(Module):
 		if module_name == "" or not (module_name in self._modules):
 			raise KeyError("module '{}' not found".format(module_name))
 		
-		self._output_value = module_name
+		self._output_module_name = module_name
 		
 		
 	def forward(self, x):
@@ -99,19 +101,35 @@ class DirectModule(Module):
 		
 		y = None
 		
-		if self._output_value != "" and self._output_value in values:
-			y = values[self._output_value]
+		if self._output_module_name != "" and self._output_module_name in values:
+			y = values[self._output_module_name]
 		else:
 			raise KeyError("output value is not setup")
 		
 		return y
 		
-
-	def add_module(self, name: str, module: Optional['Module'], prev_module_name = None) -> Module:
+	
+	def add(self, module: Optional['Module'], prev_name = None):
 		
-		if prev_module_name is not None:
-			if name == prev_module_name:
-				raise KeyError("prev module '{}' is same name".format(prev_module_name))
+		if prev_name is None and self._last_module_name != "":
+			prev_name = self[self._last_module_name]
+		
+		new_name = "module_" + str(self._module_inc)
+		
+		self.add_module(new_name, module, prev_name)
+		
+		self._module_inc = self._module_inc + 1
+		self._last_module_name = new_name
+		self._output_module_name = new_name
+		
+		return module, new_name
+	
+
+	def add_module(self, name: str, module: Optional['Module'], prev_name = None) -> Module:
+		
+		if prev_name is not None:
+			if name == prev_name:
+				raise KeyError("prev module '{}' is same name".format(prev_name))
 		
 		Module.add_module(self, name, module)
 		
@@ -141,15 +159,15 @@ class DirectModule(Module):
 			self._links_prev[dest].append(src)
 		
 		
-		if prev_module_name is None:
+		if prev_name is None:
 			self._links_none.append(name)
 		
-		if isinstance(prev_module_name, str):
-			is_exists(prev_module_name)
-			add_module_link(prev_module_name, name)
+		if isinstance(prev_name, str):
+			is_exists(prev_name)
+			add_module_link(prev_name, name)
 			
-		if isinstance(prev_module_name, list) or isinstance(prev_module_name, tuple):
-			for module_name in prev_module_name:
+		if isinstance(prev_name, list) or isinstance(prev_name, tuple):
+			for module_name in prev_name:
 				is_exists(module_name)
 				add_module_link(module_name, name)
 		
