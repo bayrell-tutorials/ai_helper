@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-from .AbstractNetwork import AbstractModel
+from .AbstractNetwork import AbstractNetwork
 from .DirectModule import DirectModule
 from .Utils import sign, indexOf, vector_append, tensorflow_gpu_init, \
 	image_resize_canvas, image_to_vector, plot_show_image, \

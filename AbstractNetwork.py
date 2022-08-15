@@ -6,6 +6,11 @@
 ##
 
 import os, torch
+import numpy as np
+import matplotlib.pyplot as plt
+
+from torch.utils.data import DataLoader, TensorDataset
+from torchsummary import summary
 
 
 class AbstractNetwork:
@@ -16,9 +21,10 @@ class AbstractNetwork:
 		
 		self.input_shape = None
 		self.output_shape = None
-		self.tensor_device = None
 		self.train_loader = None
 		self.test_loader = None
+		self.train_dataset = None
+		self.test_dataset = None
 		self.epochs = 0
 		self.batch_size = 64
 		self.model = None
@@ -27,6 +33,13 @@ class AbstractNetwork:
 		self.loss = None
 		
 		self._is_trained = False
+		
+		
+	def get_tensor_device(self):
+		r"""
+		Returns tensor device name
+		"""
+		return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 		
 		
 	def get_name(self):
@@ -40,7 +53,7 @@ class AbstractNetwork:
 		r"""
 		Returns model path
 		"""
-		return self.get_name()
+		return self.get_name() + ".zip"
 	
 	
 	def is_loaded(self):
@@ -65,6 +78,13 @@ class AbstractNetwork:
 		self._is_trained = False
 	
 	
+	def summary(self):
+		"""
+		Show model summary
+		"""
+		summary(self.model)
+	
+	
 	def save(self, file_name=None):
 		
 		r"""
@@ -73,8 +93,14 @@ class AbstractNetwork:
 		
 		if file_name is None:
 			file_name = self.get_path()
+		
+		if self.model:
 			
-		torch.save(self.model.state_dict(), file_name)
+			dir_name = os.path.dirname(file_name)
+			if not os.path.isdir(dir_name):
+				os.makedirs(dir_name)
+			
+			torch.save(self.model.state_dict(), file_name)
 	
 	
 	def load(self, file_name=None):
@@ -88,25 +114,67 @@ class AbstractNetwork:
 		
 		self._is_trained = False
 		
-		if os.path.isfile(file_name):
+		if os.path.isfile(file_name) and self.model:
 			self.model.load_state_dict(torch.load(file_name))
 			self._is_trained = True
 		
+		
+	def stop_train_callback(self, **kwargs):
+		
+		r"""
+		Stop callback
+		"""
+		
+		loss_test = kwargs["loss_test"]
+		step_index = kwargs["step_index"]
+		
+		return loss_test < 0.015 and (step_index + 1) >= 5
+		
 	
-	def train(self, verbose=True, stop_train_callback=None):
+	def train(self,
+		tensor_device=None,
+		verbose=True,
+		stop_train_callback=None,
+		train_count=None
+	):
 		
 		r"""
 		Train model
 		"""
 		
-		model = self.model.to(self.tensor_device)
+		if tensor_device is None:
+			tensor_device = self.get_tensor_device()
+		
+		if stop_train_callback is None:
+			stop_train_callback = self.__class__.stop_train_callback
+		
+		if self.train_loader is None and self.train_dataset is not None:
+			self.train_loader = DataLoader(
+				self.train_dataset,
+				batch_size=self.batch_size,
+				drop_last=False,
+				shuffle=True
+			)
+		
+		if self.test_loader is None and self.test_dataset is not None:
+			self.test_loader = DataLoader(
+				self.test_dataset,
+				batch_size=self.batch_size,
+				drop_last=False,
+				shuffle=False
+			)
+		
+		model = self.model.to(tensor_device)
 		
 		self.history = {
-		  "loss_train": [],
-		  "loss_test": [],
+			"loss_train": [],
+			"loss_test": [],
 		}
 		
-		train_count = 1
+		if train_count is None:
+			if (self.train_dataset is not None and 
+				isinstance(self.train_dataset, TensorDataset)):
+					train_count = self.train_dataset.tensors[0].shape[0]
 		
 		# Do train
 		for step_index in range(self.epochs):
@@ -119,8 +187,8 @@ class AbstractNetwork:
 			# Train batch
 			for batch_x, batch_y in self.train_loader:
 
-				batch_x = batch_x.to(self.tensor_device)
-				batch_y = batch_y.to(self.tensor_device)
+				batch_x = batch_x.to(tensor_device)
+				batch_y = batch_y.to(tensor_device)
 
 				# Predict model
 				model_res = model(batch_x)
@@ -150,8 +218,8 @@ class AbstractNetwork:
 			# Test batch
 			for batch_x, batch_y in self.test_loader:
 
-				batch_x = batch_x.to(self.tensor_device)
-				batch_y = batch_y.to(self.tensor_device)
+				batch_x = batch_x.to(tensor_device)
+				batch_y = batch_y.to(tensor_device)
 
 				# Predict model
 				model_res = model(batch_x)
@@ -171,6 +239,7 @@ class AbstractNetwork:
 			is_stop = False
 			if stop_train_callback is not None:
 				is_stop = stop_train_callback(
+					self,
 					loss_train=loss_train,
 					loss_test=loss_test,
 					step_index=step_index,
@@ -190,27 +259,61 @@ class AbstractNetwork:
 		self._is_trained = True
 		
 		
-	def predict(self, vector_x):
+	def train_show_history(self):
+		
+		r"""
+		Show train history
+		"""
+		
+		history_image = self.get_name() + ".png"
+		
+		dir_name = os.path.dirname(history_image)
+		if not os.path.isdir(dir_name):
+			os.makedirs(dir_name)
+		
+		plt.plot( np.multiply(self.history['loss_train'], 100), label='train loss')
+		plt.plot( np.multiply(self.history['loss_test'], 100), label='test loss')
+		plt.ylabel('Percent')
+		plt.xlabel('Epoch')
+		plt.legend()
+		plt.savefig(history_image)
+		plt.show()
+		
+		
+	def predict(self, vector_x, tensor_device=None):
 		
 		r"""
 		Predict model
 		"""
 		
-		vector_x = vector_x.to(self.tensor_device)
-		model = self.model.to(self.tensor_device)
+		if tensor_device is None:
+			tensor_device = self.get_tensor_device()
+		
+		vector_x = vector_x.to(tensor_device)
+		model = self.model.to(tensor_device)
 		
 		vector_y = model(vector_x)
 		
 		return vector_y
 		
 	
-	def control(self, control_loader, callback=None):
+	def control(self, control_dataset, batch_size=32, callback=None, tensor_device=None):
 		
 		r"""
 		Control model
 		"""
 		
-		model = self.model.to(self.tensor_device)
+		if tensor_device is None:
+			tensor_device = self.get_tensor_device()
+			
+		model = self.model.to(tensor_device)
+		
+		control_loader = DataLoader(
+			control_dataset,
+			batch_size=batch_size,
+			drop_last=False,
+			shuffle=False
+		)
 		
 		# Output answers
 		correct_answers = 0
@@ -219,17 +322,17 @@ class AbstractNetwork:
 		# Run control dataset
 		for batch_x, batch_y in control_loader:
 
-			batch_x = batch_x.to(self.tensor_device)
-			batch_y = batch_y.to(self.tensor_device)
-
+			batch_x = batch_x.to(tensor_device)
+			batch_y = batch_y.to(tensor_device)
+			
 			# Вычислим результат модели
-			batch_answer = model(batch_x)
+			batch_predict = model(batch_x)
 			
 			if callback != None:
 				correct = callback(
 					batch_x = batch_x,
 					batch_y = batch_y,
-					batch_answer = batch_answer
+					batch_predict = batch_predict
 				)
 				if correct:
 					correct_answers = correct_answers + 1
