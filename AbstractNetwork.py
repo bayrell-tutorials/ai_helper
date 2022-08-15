@@ -35,6 +35,7 @@ class AbstractNetwork:
 		self.loss = None
 		
 		self._is_trained = False
+		self._do_training = True
 		
 		
 	def get_tensor_device(self):
@@ -79,12 +80,20 @@ class AbstractNetwork:
 		pass
 		
 	
+	def get_train_data_count(self):
+		if (self.train_dataset is not None and
+			isinstance(self.train_dataset, TensorDataset)):
+				return self.train_dataset.tensors[0].shape[0]
+		return 1
+	
+	
 	def create_model(self):
 		r"""
 		Create model
 		"""
 		self.model = None
 		self._is_trained = False
+		
 	
 	
 	def summary(self):
@@ -128,34 +137,44 @@ class AbstractNetwork:
 			self._is_trained = True
 		
 		
-	def stop_train_callback(self, **kwargs):
-		
+	def train_epoch_callback(self, **kwargs):
 		r"""
-		Stop callback
+		Train epoch callback
 		"""
+		pass
 		
-		loss_test = kwargs["loss_test"]
-		step_index = kwargs["step_index"]
 		
-		return loss_test < 0.015 and (step_index + 1) >= 5
+	def stop_training(self):
+		r"""
+		Stop training
+		"""
+		self._do_training = False
 		
 	
 	def train(self,
 		tensor_device=None,
 		verbose=True,
-		stop_train_callback=None,
-		train_count=None
+		train_epoch_callback=None,
+		train_data_count=None
 	):
 		
 		r"""
 		Train model
 		"""
 		
+		# Adam optimizer
+		if self.optimizer is None:
+			self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+		
+		# Mean squared error
+		if self.loss is None:
+			self.loss = torch.nn.MSELoss()
+		
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
 		
-		if stop_train_callback is None:
-			stop_train_callback = self.__class__.stop_train_callback
+		if train_epoch_callback is None:
+			train_epoch_callback = self.__class__.train_epoch_callback
 		
 		if self.train_loader is None and self.train_dataset is not None:
 			self.train_loader = DataLoader(
@@ -180,12 +199,12 @@ class AbstractNetwork:
 			"loss_test": [],
 		}
 		
-		if train_count is None:
-			if (self.train_dataset is not None and 
-				isinstance(self.train_dataset, TensorDataset)):
-					train_count = self.train_dataset.tensors[0].shape[0]
+		if train_data_count is None:
+			train_data_count = self.get_train_data_count()
 		
 		# Do train
+		self._do_training = True
+		
 		for step_index in range(self.epochs):
 		  
 			loss_train = 0
@@ -205,7 +224,7 @@ class AbstractNetwork:
 				# Get loss value
 				loss_value = self.loss(model_res, batch_y)
 				loss_train = loss_value.item()
-
+				
 				# Gradient
 				self.optimizer.zero_grad()
 				loss_value.backward()
@@ -218,7 +237,7 @@ class AbstractNetwork:
 				del batch_x, batch_y
 
 				batch_iter = batch_iter + self.batch_size
-				batch_iter_value = round(batch_iter / train_count * 100)
+				batch_iter_value = round(batch_iter / train_data_count * 100)
 				
 				if verbose:
 					print (f"\rStep {step_index+1}, {batch_iter_value}%", end='')
@@ -236,34 +255,34 @@ class AbstractNetwork:
 				# Get loss value
 				loss_value = self.loss(model_res, batch_y)
 				loss_test = loss_value.item()
-			
+				
+				# Clear CUDA
+				if torch.cuda.is_available():
+					torch.cuda.empty_cache()
+					
 			
 			# Output train step info
 			if verbose:
 				print ("\r", end='')
 				print (f"Step {step_index+1}, loss: {loss_train},\tloss_test: {loss_test}")
 			
-			
-			# Is stop train ?
-			is_stop = False
-			if stop_train_callback is not None:
-				is_stop = stop_train_callback(
+			# Add history
+			self.history["loss_train"].append(loss_train)
+			self.history["loss_test"].append(loss_test)
+
+			# Epoch callback
+			if train_epoch_callback is not None:
+				train_epoch_callback(
 					self,
 					loss_train=loss_train,
 					loss_test=loss_test,
 					step_index=step_index,
+					train_data_count=train_data_count,
 				)
-			else:
-				is_stop = loss_test < 0.015 and step_index > 5
 			
-			# Stop train
-			if is_stop:
+			if not self._do_training:
 				break
 			
-			
-			# Add history
-			self.history["loss_train"].append(loss_train)
-			self.history["loss_test"].append(loss_test)
 		
 		self._is_trained = True
 		

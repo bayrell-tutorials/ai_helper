@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import math, io
+import math, io, torch
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 def sign(x):
 	"""
-		Sign function
+	Sign function
 	"""
 	if x >= 0: return 1
 	return -1
@@ -21,7 +21,7 @@ def sign(x):
 	
 def indexOf(arr, item):
 	"""
-		Index of
+	Index of
 	"""
 	try:
 		index = arr.index(item)
@@ -31,10 +31,10 @@ def indexOf(arr, item):
 	return -1
 	
 	
-def vector_append(res, data):
+def numpy_append(res, data):
 	
 	"""
-		Append 2 numpy vectors
+	Append 2 numpy vectors
 	"""
 	
 	if res is None:
@@ -47,7 +47,7 @@ def vector_append(res, data):
 	
 def tensorflow_gpu_init(memory_limit=1024):
 	"""
-		Init tensorflow GPU
+	Init tensorflow GPU
 	"""
 	import tensorflow as tf
 	gpus = tf.config.list_physical_devices('GPU')
@@ -57,11 +57,10 @@ def tensorflow_gpu_init(memory_limit=1024):
 	    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=memory_limit)])
 
 
-
 def image_resize_canvas(image, size, color=None):
 	
 	"""
-		Resize image canvas
+	Resize image canvas
 	"""
 	
 	width, height = size
@@ -86,10 +85,10 @@ def image_resize_canvas(image, size, color=None):
 	return image_new
 	
 	
-def image_to_vector(image_bytes, mode=None):
+def image_to_tensor(image_bytes, mode=None):
 	
 	"""
-		Convert image to numpy vector
+	Convert image to numpy vector
 	"""
 	
 	image = None
@@ -111,32 +110,41 @@ def image_to_vector(image_bytes, mode=None):
 	if mode is not None:
 		image = image.convert(mode)
 	
-	image_vector = np.asarray(image)
+	tensor = torch.from_numpy( np.asarray(image) )
+	
+	del image
+	
+	return tensor
+	
 
-	return image_vector
-	
-	
-def plot_show_image(image):
+def plot_show_image(image, cmap=None):
 	"""
-		Plot show image
+	Plot show image
 	"""
-	plt.imshow(image, cmap='gray')
+	plt.imshow(image, cmap)
 	plt.show()
 	
-	
-def get_answer_vector_by_number(number, count):
+
+def get_vector_from_answer(count):
+	r"""
+	Returns vector from answer
+	1 -> [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+	5 -> [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
 	"""
-		Returns anwer vector
-	"""
-	res = [0.0] * count
-	if (number >=0 and number < count):
-		res[number] = 1.0
-	return np.asarray(res)
+	def f(number):
+		res = [0.0] * count
+		
+		if (number >=0 and number < count):
+			res[number] = 1.0
+			
+		return res
+		
+	return f
 
 
 def get_answer_from_vector(vector):
 	"""
-		Returns answer from vector
+	Returns answer from vector
 	"""
 	value_max = -math.inf
 	value_index = 0
