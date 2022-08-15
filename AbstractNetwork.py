@@ -155,7 +155,8 @@ class AbstractNetwork:
 		tensor_device=None,
 		verbose=True,
 		train_epoch_callback=None,
-		train_data_count=None
+		train_data_count=None,
+		check_answer=None
 	):
 		
 		r"""
@@ -193,6 +194,9 @@ class AbstractNetwork:
 			)
 		
 		model = self.model.to(tensor_device)
+		
+		if check_answer is None:
+			check_answer = self.__class__.check_answer
 		
 		self.history = {
 			"loss_train": [],
@@ -325,7 +329,7 @@ class AbstractNetwork:
 		return vector_y
 	
 	
-	def check_answer(self, batch_x, batch_y, batch_predict):
+	def check_answer(self, batch_x, batch_y, batch_predict, type):
 		"""
 		Check batch anser
 		"""
@@ -381,7 +385,8 @@ class AbstractNetwork:
 					self,
 					batch_x = batch_x,
 					batch_y = batch_y,
-					batch_predict = batch_predict
+					batch_predict = batch_predict,
+					type="control"
 				)
 				correct_answers = correct_answers + correct
 			
