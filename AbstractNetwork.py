@@ -23,8 +23,10 @@ class AbstractNetwork:
 		self.output_shape = None
 		self.train_loader = None
 		self.test_loader = None
+		self.control_loader = None
 		self.train_dataset = None
 		self.test_dataset = None
+		self.control_dataset = None
 		self.epochs = 0
 		self.batch_size = 64
 		self.model = None
@@ -69,6 +71,13 @@ class AbstractNetwork:
 		"""
 		return self.is_loaded() and self._is_trained
 	
+	
+	def load_dataset(self, type):
+		"""
+		Load dataset
+		"""
+		pass
+		
 	
 	def create_model(self):
 		r"""
@@ -295,9 +304,22 @@ class AbstractNetwork:
 		vector_y = model(vector_x)
 		
 		return vector_y
+	
+	
+	def check_answer(self, batch_x, batch_y, batch_predict):
+		"""
+		Check batch anser
+		"""
+		
+		return 0
 		
 	
-	def control(self, control_dataset, batch_size=32, callback=None, tensor_device=None):
+	def control(self,
+		control_dataset=None, control_loader=None,
+		batch_size=32, check_answer=None,
+		tensor_device=None,
+		verbose=True
+	):
 		
 		r"""
 		Control model
@@ -308,12 +330,19 @@ class AbstractNetwork:
 			
 		model = self.model.to(tensor_device)
 		
-		control_loader = DataLoader(
-			control_dataset,
-			batch_size=batch_size,
-			drop_last=False,
-			shuffle=False
-		)
+		if control_dataset is None:
+			control_dataset = self.control_dataset
+		
+		if control_loader is None and control_dataset is not None:
+			control_loader = DataLoader(
+				control_dataset,
+				batch_size=batch_size,
+				drop_last=False,
+				shuffle=False
+			)
+		
+		if check_answer is None:
+			check_answer = self.__class__.check_answer
 		
 		# Output answers
 		correct_answers = 0
@@ -328,16 +357,22 @@ class AbstractNetwork:
 			# Вычислим результат модели
 			batch_predict = model(batch_x)
 			
-			if callback != None:
-				correct = callback(
+			if check_answer != None:
+				correct = check_answer(
+					self,
 					batch_x = batch_x,
 					batch_y = batch_y,
 					batch_predict = batch_predict
 				)
-				if correct:
-					correct_answers = correct_answers + 1
+				correct_answers = correct_answers + correct
 			
 			total_questions = total_questions + 1
+		
+		if verbose:
+			print ("Control rate: " +
+				str(correct_answers) + " of " + str(total_questions) + " " +
+				"(" + str(round( correct_answers / total_questions * 100)) + "%)"
+			)
 		
 		return correct_answers, total_questions
 
