@@ -19,8 +19,6 @@ class AbstractNetwork:
 	def __init__(self):
 		#AbstractNetwork.__init__(self)
 		
-		self.input_shape = None
-		self.output_shape = None
 		self.train_loader = None
 		self.test_loader = None
 		self.control_loader = None
@@ -29,58 +27,110 @@ class AbstractNetwork:
 		self.control_dataset = None
 		self.epochs = 0
 		self.batch_size = 64
+		self.test_size = 0.1
 		self.model = None
 		self.history = None
 		self.optimizer = None
 		self.loss = None
 		
+		self._is_debug = False
 		self._is_trained = False
 		self._do_training = True
 		
 		
+	def debug(self, value):
+		"""
+		Set debug level
+		"""
+		self._is_debug = value
+		
+		
+	def print_debug(self, *args):
+		"""
+		Print if debug level is True
+		"""
+		if self._is_debug:
+			print(*args)
+		
+		
 	def get_tensor_device(self):
-		r"""
+		"""
 		Returns tensor device name
 		"""
 		return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 		
 		
 	def get_name(self):
-		r"""
+		"""
 		Returns model name
 		"""
 		return os.path.join("data", "model")
 	
 	
 	def get_path(self):
-		r"""
+		"""
 		Returns model path
 		"""
 		return self.get_name() + ".zip"
 	
 	
 	def is_loaded(self):
-		r"""
+		"""
 		Returns true if model is loaded
 		"""
 		return self.model is not None
 	
 	
 	def is_trained(self):
-		r"""
+		"""
 		Returns true if model is loaded
 		"""
 		return self.is_loaded() and self._is_trained
 	
 	
 	def load_dataset(self, type):
+		
 		"""
 		Load dataset
 		"""
-		pass
+		
+		if type == "train":
+			
+			self.train_dataset, self.test_dataset = self.get_train_dataset(
+				test_size=self.test_size
+			)
+		
+		if type == "control":
+			
+			self.control_dataset = self.get_control_dataset()
+	
+	
+	def get_train_dataset(cls):
+		
+		"""
+		Returns normalized train and test datasets
+		"""
+		
+		train_dataset = TensorDataset( torch.tensor(), torch.tensor() )
+		test_dataset = TensorDataset( torch.tensor(), torch.tensor() )
+		
+		return train_dataset, test_dataset
+	
+	
+	def get_control_dataset(cls):
+		
+		"""
+		Returns normalized control dataset
+		"""
+		
+		dataset = TensorDataset( torch.tensor(), torch.tensor() )
+		return dataset
 		
 	
 	def get_train_data_count(self):
+		"""
+		Returns traind data count
+		"""
 		if (self.train_dataset is not None and
 			isinstance(self.train_dataset, TensorDataset)):
 				return self.train_dataset.tensors[0].shape[0]
@@ -88,7 +138,7 @@ class AbstractNetwork:
 	
 	
 	def create_model(self):
-		r"""
+		"""
 		Create model
 		"""
 		self.model = None
@@ -105,7 +155,7 @@ class AbstractNetwork:
 	
 	def save(self, file_name=None):
 		
-		r"""
+		"""
 		Save model to file
 		"""
 		
@@ -123,7 +173,7 @@ class AbstractNetwork:
 	
 	def load(self, file_name=None):
 		
-		r"""
+		"""
 		Load model from file
 		"""
 		
@@ -138,14 +188,20 @@ class AbstractNetwork:
 		
 		
 	def train_epoch_callback(self, **kwargs):
-		r"""
+		"""
 		Train epoch callback
 		"""
+		
+		step_index = kwargs["step_index"]
+		
+		if step_index >= self.epochs:
+			self.stop_training()
+		
 		pass
 		
 		
 	def stop_training(self):
-		r"""
+		"""
 		Stop training
 		"""
 		self._do_training = False
@@ -159,7 +215,7 @@ class AbstractNetwork:
 		check_answer=None
 	):
 		
-		r"""
+		"""
 		Train model
 		"""
 		
@@ -209,7 +265,8 @@ class AbstractNetwork:
 		# Do train
 		self._do_training = True
 		
-		for step_index in range(self.epochs):
+		step_index = 0
+		while True:
 		  
 			loss_train = 0
 			loss_test = 0
@@ -287,13 +344,15 @@ class AbstractNetwork:
 			if not self._do_training:
 				break
 			
+			step_index = step_index + 1
+			
 		
 		self._is_trained = True
 		
 		
 	def train_show_history(self):
 		
-		r"""
+		"""
 		Show train history
 		"""
 		
@@ -314,7 +373,7 @@ class AbstractNetwork:
 		
 	def predict(self, vector_x, tensor_device=None):
 		
-		r"""
+		"""
 		Predict model
 		"""
 		
@@ -344,7 +403,7 @@ class AbstractNetwork:
 		verbose=True
 	):
 		
-		r"""
+		"""
 		Control model
 		"""
 		
@@ -390,7 +449,7 @@ class AbstractNetwork:
 				)
 				correct_answers = correct_answers + correct
 			
-			total_questions = total_questions + 1
+			total_questions = total_questions + batch_x.shape[0]
 		
 		if verbose:
 			print ("Control rate: " +

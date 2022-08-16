@@ -29,7 +29,7 @@ class DataSet:
 	def save(self, file_name):
 		
 		"""
-			Save dataset to file
+		Save dataset to file
 		"""
 		
 		x = self.get_x()
@@ -50,7 +50,7 @@ class DataSet:
 	def load(self, file_name):
 		
 		"""
-			Load dataset from file
+		Load dataset from file
 		"""
 		
 		data = np.load(file_name + ".npz")
@@ -66,7 +66,7 @@ class DataSet:
 	def append(self, x, y):
 		
 		"""
-			Add data to dataset
+		Add data to dataset
 		"""
 		
 		self.data.append((x, y))
@@ -76,7 +76,7 @@ class DataSet:
 	def get_x(self):
 		
 		"""
-			Return x from dataset
+		Return x from dataset
 		"""
 		
 		return np.asarray(list(map(lambda item: item[0], self.data)))
@@ -85,7 +85,7 @@ class DataSet:
 	def get_y(self):
 		
 		"""
-			Return y from dataset
+		Return y from dataset
 		"""
 		
 		return np.asarray(list(map(lambda item: item[1], self.data)))
@@ -94,7 +94,7 @@ class DataSet:
 	def build_train(self):
 		
 		"""
-			Build dataset for train
+		Build dataset for train
 		"""
 		
 		if self._is_new and self.data != None:
@@ -115,7 +115,7 @@ class DataSet:
 	def get_input_shape(self):
 		
 		"""
-			Returns input shape
+		Returns input shape
 		"""
 		
 		input_shape = self.data[0][0].shape
@@ -125,7 +125,7 @@ class DataSet:
 	def get_output_shape(self):
 		
 		"""
-			Returns output shape
+		Returns output shape
 		"""
 		
 		output_shape = self.data[0][1].shape
@@ -135,7 +135,7 @@ class DataSet:
 	def get_train_shape(self):
 		
 		"""
-			Returns train shape
+		Returns train shape
 		"""
 		
 		input_shape = self.train_x.shape[1:]

@@ -10,25 +10,25 @@ import io, os
 from PIL import Image
 
 
-class DataStream:
+class Directory:
 	
 	def __init__(self):
-		self.dataset_name = os.path.join("data", "dataset")
+		self.dir_name = os.path.join("data")
 	
 	
 	def open(self, *args):
 		
 		"""
-			Open dataset
+		Open dir
 		"""
 		
-		self.dataset_name = os.path.join(*args)
+		self.dir_name = os.path.join(*args)
 	
 	
 	def flush(self):
 		
 		"""
-			Flush dataset
+		Flush dir
 		"""
 		
 		pass
@@ -37,7 +37,7 @@ class DataStream:
 	def close(self):
 		
 		"""
-			Close dataset
+		Close dir
 		"""
 		
 		self.flush()
@@ -46,17 +46,17 @@ class DataStream:
 	def get_dataset_path(self, *args):
 		
 		"""
-			Returns dataset full path
+		Returns dataset full path
 		"""
 		
-		return os.path.join(self.dataset_name, *args)
+		return os.path.join(self.dir_name, *args)
 	
 	
 	
 	def list_files(self, *args, recursive=True):
 	
 		"""
-			Returns files in folder
+		Returns files in folder
 		"""
 	
 		def read_dir(path, recursive=True):
@@ -96,7 +96,7 @@ class DataStream:
 	def list_dirs(self, *args):
 		
 		"""
-			Returns dirs in folder
+		Returns dirs in folder
 		"""
 		
 		dir_name = self.get_dataset_path(*args)
@@ -113,7 +113,7 @@ class DataStream:
 	def save_bytes(self, file_name, data):
 		
 		"""
-			Save bytes to file
+		Save bytes to file
 		"""
 		
 		file_path = self.get_dataset_path(file_name)
@@ -130,7 +130,7 @@ class DataStream:
 	def read_bytes(self, file_name):
 		
 		"""
-			Load bytes from file
+		Load bytes from file
 		"""
 		
 		file_path = self.get_dataset_path(file_name)
@@ -145,7 +145,7 @@ class DataStream:
 	def save_file(self, file_name, data):
 		
 		"""
-			Save file
+		Save file
 		"""
 		
 		bytes = None
@@ -168,7 +168,7 @@ class DataStream:
 	def read_file(self, file_name):
 		
 		"""
-			Read file
+		Read file
 		"""
 		
 		return self.read_bytes(file_name)

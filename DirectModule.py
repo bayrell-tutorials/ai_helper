@@ -38,7 +38,7 @@ class DirectModule(Module):
 		
 		def get_prev_value(module_name, values):
 			
-			r"""
+			"""
 			Returns prev value for module_name
 			"""
 			
@@ -59,7 +59,7 @@ class DirectModule(Module):
 		
 		def get_next_value(module_name, values):
 			
-			r"""
+			"""
 			Predict next value for module_name
 			"""
 			
@@ -72,7 +72,7 @@ class DirectModule(Module):
 		
 		def clear_values(current_prev_list, values):
 			
-			r"""
+			"""
 			Clear unnecessary values
 			"""
 			
@@ -136,7 +136,7 @@ class DirectModule(Module):
 		
 		def is_exists(module_name):
 			
-			r"""
+			"""
 			Check if module is exists
 			"""
 			
@@ -146,7 +146,7 @@ class DirectModule(Module):
 		
 		def add_module_link(src, dest):
 			
-			r"""
+			"""
 			Add module link src -> dest
 			"""
 			

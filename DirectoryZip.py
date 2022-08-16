@@ -6,12 +6,16 @@
 ##
 
 import os, zipfile, shutil
-from .Helper import indexOf
+from .Directory import Directory
+from .Utils import indexOf
 
 
-class DataSetZipReader:
+class DirectoryZip(Directory):
 	
 	def __init__(self):
+		
+		Directory.__init__(self)
+		
 		self.file_path = None
 		self.file_path_tmp = None
 		
@@ -24,7 +28,7 @@ class DataSetZipReader:
 	
 	def open(self, file_path):
 		"""
-			Открывает zip Архив датасета
+			Открывает zip Архив
 		"""
 		self.file_path = file_path
 		self.file_path_tmp = file_path + ".tmp"
@@ -34,7 +38,7 @@ class DataSetZipReader:
 	
 	def open_tpm_write(self):
 		"""
-			Открывает временный zip архив датасета для записи
+			Открывает временный zip архив для записи
 		"""
 		if self.zip_file_tmp is None:
 			self.zip_file_tmp = zipfile.ZipFile(self.file_path_tmp, 'w')

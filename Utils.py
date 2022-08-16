@@ -110,7 +110,7 @@ def image_to_tensor(image_bytes, mode=None):
 	if mode is not None:
 		image = image.convert(mode)
 	
-	tensor = torch.from_numpy( np.asarray(image) )
+	tensor = torch.from_numpy( np.array(image) )
 	
 	del image
 	
@@ -126,10 +126,10 @@ def plot_show_image(image, cmap=None):
 	
 
 def get_vector_from_answer(count):
-	r"""
-	Returns vector from answer
-	1 -> [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
-	5 -> [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+	"""
+	Returns vector from answer\n
+		1 -> [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]\n
+		5 -> [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
 	"""
 	def f(number):
 		res = [0.0] * count
