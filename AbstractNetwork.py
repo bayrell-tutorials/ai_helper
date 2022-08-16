@@ -231,10 +231,6 @@ class AbstractNetwork:
 			tensor_y = batch_y[i]
 			tensor_predict = batch_predict[i]
 			
-			tensor_x = tensor_x.reshape((28,28)).tolist()
-			tensor_y = tensor_y.tolist()
-			tensor_predict = tensor_predict.round().tolist()
-			
 			flag = self.check_answer(
 				tensor_x=tensor_x,
 				tensor_y=tensor_y,
@@ -337,153 +333,164 @@ class AbstractNetwork:
 		self._do_training = True
 		
 		epoch_number = 1
-		while True:
-			
-			batch_train_iter = 0
-			batch_test_iter = 0
-			train_count = 0
-			test_count = 0
-			loss_train = 0
-			loss_test = 0
-			accuracy_train = 0
-			accuracy_test = 0
+		
+		try:
+		
+			while True:
+				
+				batch_train_iter = 0
+				batch_test_iter = 0
+				train_count = 0
+				test_count = 0
+				loss_train = 0
+				loss_test = 0
+				accuracy_train = 0
+				accuracy_test = 0
 
-			# Train batch
-			for batch_x, batch_y in self.train_loader:
-				
-				train_count = train_count + batch_x.shape[0]
-				batch_x = batch_x.to(tensor_device)
-				batch_y = batch_y.to(tensor_device)
+				# Train batch
+				for batch_x, batch_y in self.train_loader:
+					
+					train_count = train_count + batch_x.shape[0]
+					batch_x = batch_x.to(tensor_device)
+					batch_y = batch_y.to(tensor_device)
 
-				# Predict model
-				batch_predict = model(batch_x)
+					# Predict model
+					batch_predict = model(batch_x)
 
-				# Get loss value
-				loss_value = self.loss(batch_predict, batch_y)
-				loss_train = loss_train + loss_value.item()
+					# Get loss value
+					loss_value = self.loss(batch_predict, batch_y)
+					loss_train = loss_train + loss_value.item()
+					
+					# Gradient
+					self.optimizer.zero_grad()
+					loss_value.backward()
+					self.optimizer.step()
+					
+					# Calc accuracy
+					accuracy = self.check_answer_batch(
+						epoch_number=epoch_number,
+						batch_iter=batch_train_iter,
+						train_count=train_count,
+						batch_x=batch_x,
+						batch_y=batch_y,
+						batch_predict=batch_predict,
+						train_kind="train",
+						type="train"
+					)
+					accuracy_train = accuracy_train + accuracy
+					batch_train_iter = batch_train_iter + 1
+					
+					if verbose:
+						
+						accuracy_train_value = accuracy_train / train_count
+						loss_train_value = loss_train / batch_train_iter
+						
+						msg = ("\rStep {epoch_number}, {iter_value}%" +
+							", acc: .{acc}, loss: .{loss}"
+						).format(
+							epoch_number=epoch_number,
+							iter_value=round(train_count / train_data_count * 100),
+							loss=str(round(loss_train_value * 10000)).zfill(4),
+							acc=str(round(accuracy_train_value * 100)).zfill(2),
+						)
+						
+						print (msg, end='')
+					
+					del batch_x, batch_y
+					
+					# Clear CUDA
+					if torch.cuda.is_available():
+						torch.cuda.empty_cache()
 				
-				# Gradient
-				self.optimizer.zero_grad()
-				loss_value.backward()
-				self.optimizer.step()
+					
+				# Test batch
+				for batch_x, batch_y in self.test_loader:
+					
+					test_count = test_count + batch_x.shape[0]
+					batch_x = batch_x.to(tensor_device)
+					batch_y = batch_y.to(tensor_device)
+
+					# Predict model
+					batch_predict = model(batch_x)
+					
+					# Get loss value
+					loss_value = self.loss(batch_predict, batch_y)
+					loss_test = loss_test + loss_value.item()
+					batch_test_iter = batch_test_iter + 1
+					
+					# Calc accuracy
+					accuracy = self.check_answer_batch(
+						epoch_number=epoch_number,
+						train_count=test_count,
+						batch_iter=batch_test_iter,
+						batch_x=batch_x,
+						batch_y=batch_y,
+						batch_predict=batch_predict,
+						train_kind="test",
+						type="train"
+					)
+					accuracy_test = accuracy_test + accuracy
+					
+					# Clear CUDA
+					if torch.cuda.is_available():
+						torch.cuda.empty_cache()
+						
+				# Add history
+				loss_train = loss_train / batch_train_iter
+				loss_test = loss_test / batch_test_iter
+				accuracy_train = accuracy_train / train_count
+				accuracy_test =  accuracy_test / test_count
+				self.history["loss_train"].append(loss_train)
+				self.history["loss_test"].append(loss_test)
+				self.history["acc_train"].append(accuracy_train)
+				self.history["acc_test"].append(accuracy_test)
 				
-				# Calc accuracy
-				accuracy = self.check_answer_batch(
-					epoch_number=epoch_number,
-					batch_iter=batch_train_iter,
-					train_count=train_count,
-					batch_x=batch_x,
-					batch_y=batch_y,
-					batch_predict=batch_predict,
-					train_kind="train",
-					type="train"
-				)
-				accuracy_train = accuracy_train + accuracy
-				batch_train_iter = batch_train_iter + 1
-				
+				# Output train step info
 				if verbose:
+					print ("\r", end='')
 					
-					accuracy_train_value = accuracy_train / train_count
-					loss_train_value = loss_train / batch_train_iter
-					
-					msg = ("\rStep {epoch_number}, {iter_value}%" +
-						", acc: .{acc}, loss: .{loss}"
+					msg = ("Step {epoch_number}, " +
+						"acc: .{accuracy_train}, " +
+						"acc_test: .{accuracy_test}, " +
+						"loss: .{loss_train}, " +
+						"loss_test: .{loss_test}"
 					).format(
-						epoch_number=epoch_number + 1,
-						iter_value=round(train_count / train_data_count * 100),
-						loss=str(round(loss_train_value * 10000)).zfill(4),
-						acc=str(round(accuracy_train_value * 100)).zfill(2),
+						epoch_number = epoch_number,
+						loss_train = str(round(loss_train * 10000)).zfill(4),
+						loss_test = str(round(loss_test * 10000)).zfill(4),
+						accuracy_train = str(round(accuracy_train * 100)).zfill(2),
+						accuracy_test = str(round(accuracy_test * 100)).zfill(2),
 					)
 					
-					print (msg, end='')
-				
-				del batch_x, batch_y
-				
-				# Clear CUDA
-				if torch.cuda.is_available():
-					torch.cuda.empty_cache()
-			
-				
-			# Test batch
-			for batch_x, batch_y in self.test_loader:
-				
-				test_count = test_count + batch_x.shape[0]
-				batch_x = batch_x.to(tensor_device)
-				batch_y = batch_y.to(tensor_device)
+					print (msg)
 
-				# Predict model
-				batch_predict = model(batch_x)
+				# Epoch callback
+				if train_epoch_callback is not None:
+					train_epoch_callback(
+						self,
+						loss_train=loss_train,
+						loss_test=loss_test,
+						accuracy_train=accuracy_train,
+						accuracy_test=accuracy_test,
+						epoch_number=epoch_number,
+						train_data_count=train_data_count,
+					)
 				
-				# Get loss value
-				loss_value = self.loss(batch_predict, batch_y)
-				loss_test = loss_test + loss_value.item()
-				batch_test_iter = batch_test_iter + 1
+				if not self._do_training:
+					break
 				
-				# Calc accuracy
-				accuracy = self.check_answer_batch(
-					epoch_number=epoch_number,
-					train_count=test_count,
-					batch_iter=batch_test_iter,
-					batch_x=batch_x,
-					batch_y=batch_y,
-					batch_predict=batch_predict,
-					train_kind="test",
-					type="train"
-				)
-				accuracy_test = accuracy_test + accuracy
+				epoch_number = epoch_number + 1
 				
-				# Clear CUDA
-				if torch.cuda.is_available():
-					torch.cuda.empty_cache()
-					
-			# Add history
-			loss_train = loss_train / batch_train_iter
-			loss_test = loss_test / batch_test_iter
-			accuracy_train = accuracy_train / train_count
-			accuracy_test =  accuracy_test / test_count
-			self.history["loss_train"].append(loss_train)
-			self.history["loss_test"].append(loss_test)
-			self.history["acc_train"].append(accuracy_train)
-			self.history["acc_test"].append(accuracy_test)
+			self._is_trained = True
 			
-			# Output train step info
-			if verbose:
-				print ("\r", end='')
-				
-				msg = ("Step {epoch_number}, " +
-					"acc: .{accuracy_train}, " +
-					"acc_test: .{accuracy_test}, " +
-					"loss: .{loss_train}, " +
-					"loss_test: .{loss_test}"
-				).format(
-					epoch_number = epoch_number + 1,
-					loss_train = str(round(loss_train * 10000)).zfill(4),
-					loss_test = str(round(loss_test * 10000)).zfill(4),
-					accuracy_train = str(round(accuracy_train * 100)).zfill(2),
-					accuracy_test = str(round(accuracy_test * 100)).zfill(2),
-				)
-				
-				print (msg)
+		except KeyboardInterrupt:
+			
+			print ("")
+			print ("Stopped manually")
+			print ("")
+			
+			pass
 
-			# Epoch callback
-			if train_epoch_callback is not None:
-				train_epoch_callback(
-					self,
-					loss_train=loss_train,
-					loss_test=loss_test,
-					accuracy_train=accuracy_train,
-					accuracy_test=accuracy_test,
-					epoch_number=epoch_number,
-					train_data_count=train_data_count,
-				)
-			
-			if not self._do_training:
-				break
-			
-			epoch_number = epoch_number + 1
-			
-		
-		self._is_trained = True
 		
 		
 	def train_show_history(self):
