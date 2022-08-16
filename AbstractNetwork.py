@@ -193,9 +193,13 @@ class AbstractNetwork:
 		
 		self._is_trained = False
 		
-		if os.path.isfile(file_name) and self.model:
-			self.model.load_state_dict(torch.load(file_name))
-			self._is_trained = True
+		try:
+			if os.path.isfile(file_name) and self.model:
+				self.model.load_state_dict(torch.load(file_name))
+				self._is_trained = True
+		
+		except:
+			pass
 		
 		
 	def check_answer(self, **kwargs):
