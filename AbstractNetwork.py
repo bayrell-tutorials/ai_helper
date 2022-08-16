@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from torchsummary import summary
 
+from ai_helper import *
+
 
 class AbstractNetwork:
 	
@@ -25,7 +27,6 @@ class AbstractNetwork:
 		self.train_dataset = None
 		self.test_dataset = None
 		self.control_dataset = None
-		self.epochs = 0
 		self.batch_size = 64
 		self.test_size = 0.1
 		self.model = None
@@ -129,11 +130,21 @@ class AbstractNetwork:
 	
 	def get_train_data_count(self):
 		"""
-		Returns traind data count
+		Returns train data count
 		"""
 		if (self.train_dataset is not None and
 			isinstance(self.train_dataset, TensorDataset)):
 				return self.train_dataset.tensors[0].shape[0]
+		return 1
+	
+	
+	def get_test_data_count(self):
+		"""
+		Returns test data count
+		"""
+		if (self.test_dataset is not None and
+			isinstance(self.test_dataset, TensorDataset)):
+				return self.test_dataset.tensors[0].shape[0]
 		return 1
 	
 	
@@ -187,14 +198,72 @@ class AbstractNetwork:
 			self._is_trained = True
 		
 		
+	def check_answer(self, **kwargs):
+		"""
+		Check answer
+		"""
+		
+		type = kwargs["type"]
+		tensor_x = kwargs["tensor_x"]
+		tensor_y = kwargs["tensor_y"]
+		tensor_predict = kwargs["tensor_predict"]
+		
+		y = get_answer_from_vector(tensor_y)
+		predict = get_answer_from_vector(tensor_predict)
+		
+		return predict == y
+		
+		
+	def check_answer_batch(self, **kwargs):
+		"""
+		Check batch. Returns count right answers
+		"""
+		res = 0
+		
+		type = kwargs["type"]
+		batch_x = kwargs["batch_x"]
+		batch_y = kwargs["batch_y"]
+		batch_predict = kwargs["batch_predict"]
+		
+		for i in range(batch_x.shape[0]):
+			
+			tensor_x = batch_x[i] * 256
+			tensor_y = batch_y[i]
+			tensor_predict = batch_predict[i]
+			
+			tensor_x = tensor_x.reshape((28,28)).tolist()
+			tensor_y = tensor_y.tolist()
+			tensor_predict = tensor_predict.round().tolist()
+			
+			flag = self.check_answer(
+				tensor_x=tensor_x,
+				tensor_y=tensor_y,
+				tensor_predict=tensor_predict,
+				type=type,
+			)
+			
+			if flag:
+				res = res + 1
+		
+		return res
+		
+		
 	def train_epoch_callback(self, **kwargs):
 		"""
 		Train epoch callback
 		"""
 		
-		step_index = kwargs["step_index"]
+		epoch_number = kwargs["epoch_number"]
+		accuracy_train = kwargs["accuracy_train"]
+		accuracy_test = kwargs["accuracy_test"]
 		
-		if step_index >= self.epochs:
+		if epoch_number >= 20:
+			self.stop_training()
+			
+		if accuracy_train > 0.95:
+			self.stop_training()
+		
+		if accuracy_test > 0.95:
 			self.stop_training()
 		
 		pass
@@ -212,7 +281,7 @@ class AbstractNetwork:
 		verbose=True,
 		train_epoch_callback=None,
 		train_data_count=None,
-		check_answer=None
+		check_answer_batch=None
 	):
 		
 		"""
@@ -251,12 +320,14 @@ class AbstractNetwork:
 		
 		model = self.model.to(tensor_device)
 		
-		if check_answer is None:
-			check_answer = self.__class__.check_answer
+		if check_answer_batch is None:
+			check_answer_batch = self.__class__.check_answer_batch
 		
 		self.history = {
 			"loss_train": [],
 			"loss_test": [],
+			"acc_train": [],
+			"acc_test": [],
 		}
 		
 		if train_data_count is None:
@@ -265,71 +336,134 @@ class AbstractNetwork:
 		# Do train
 		self._do_training = True
 		
-		step_index = 0
+		epoch_number = 1
 		while True:
-		  
+			
+			batch_train_iter = 0
+			batch_test_iter = 0
+			train_count = 0
+			test_count = 0
 			loss_train = 0
 			loss_test = 0
-
-			batch_iter = 0
+			accuracy_train = 0
+			accuracy_test = 0
 
 			# Train batch
 			for batch_x, batch_y in self.train_loader:
-
+				
+				train_count = train_count + batch_x.shape[0]
 				batch_x = batch_x.to(tensor_device)
 				batch_y = batch_y.to(tensor_device)
 
 				# Predict model
-				model_res = model(batch_x)
+				batch_predict = model(batch_x)
 
 				# Get loss value
-				loss_value = self.loss(model_res, batch_y)
-				loss_train = loss_value.item()
+				loss_value = self.loss(batch_predict, batch_y)
+				loss_train = loss_train + loss_value.item()
 				
 				# Gradient
 				self.optimizer.zero_grad()
 				loss_value.backward()
 				self.optimizer.step()
-
+				
+				# Calc accuracy
+				accuracy = self.check_answer_batch(
+					epoch_number=epoch_number,
+					batch_iter=batch_train_iter,
+					train_count=train_count,
+					batch_x=batch_x,
+					batch_y=batch_y,
+					batch_predict=batch_predict,
+					train_kind="train",
+					type="train"
+				)
+				accuracy_train = accuracy_train + accuracy
+				batch_train_iter = batch_train_iter + 1
+				
+				if verbose:
+					
+					accuracy_train_value = accuracy_train / train_count
+					loss_train_value = loss_train / batch_train_iter
+					
+					msg = ("\rStep {epoch_number}, {iter_value}%" +
+						", acc: .{acc}, loss: .{loss}"
+					).format(
+						epoch_number=epoch_number + 1,
+						iter_value=round(train_count / train_data_count * 100),
+						loss=str(round(loss_train_value * 10000)).zfill(4),
+						acc=str(round(accuracy_train_value * 100)).zfill(2),
+					)
+					
+					print (msg, end='')
+				
+				del batch_x, batch_y
+				
 				# Clear CUDA
 				if torch.cuda.is_available():
 					torch.cuda.empty_cache()
-
-				del batch_x, batch_y
-
-				batch_iter = batch_iter + self.batch_size
-				batch_iter_value = round(batch_iter / train_data_count * 100)
+			
 				
-				if verbose:
-					print (f"\rStep {step_index+1}, {batch_iter_value}%", end='')
-			
-			
 			# Test batch
 			for batch_x, batch_y in self.test_loader:
-
+				
+				test_count = test_count + batch_x.shape[0]
 				batch_x = batch_x.to(tensor_device)
 				batch_y = batch_y.to(tensor_device)
 
 				# Predict model
-				model_res = model(batch_x)
-
+				batch_predict = model(batch_x)
+				
 				# Get loss value
-				loss_value = self.loss(model_res, batch_y)
-				loss_test = loss_value.item()
+				loss_value = self.loss(batch_predict, batch_y)
+				loss_test = loss_test + loss_value.item()
+				batch_test_iter = batch_test_iter + 1
+				
+				# Calc accuracy
+				accuracy = self.check_answer_batch(
+					epoch_number=epoch_number,
+					train_count=test_count,
+					batch_iter=batch_test_iter,
+					batch_x=batch_x,
+					batch_y=batch_y,
+					batch_predict=batch_predict,
+					train_kind="test",
+					type="train"
+				)
+				accuracy_test = accuracy_test + accuracy
 				
 				# Clear CUDA
 				if torch.cuda.is_available():
 					torch.cuda.empty_cache()
 					
+			# Add history
+			loss_train = loss_train / batch_train_iter
+			loss_test = loss_test / batch_test_iter
+			accuracy_train = accuracy_train / train_count
+			accuracy_test =  accuracy_test / test_count
+			self.history["loss_train"].append(loss_train)
+			self.history["loss_test"].append(loss_test)
+			self.history["acc_train"].append(accuracy_train)
+			self.history["acc_test"].append(accuracy_test)
 			
 			# Output train step info
 			if verbose:
 				print ("\r", end='')
-				print (f"Step {step_index+1}, loss: {loss_train},\tloss_test: {loss_test}")
-			
-			# Add history
-			self.history["loss_train"].append(loss_train)
-			self.history["loss_test"].append(loss_test)
+				
+				msg = ("Step {epoch_number}, " +
+					"acc: .{accuracy_train}, " +
+					"acc_test: .{accuracy_test}, " +
+					"loss: .{loss_train}, " +
+					"loss_test: .{loss_test}"
+				).format(
+					epoch_number = epoch_number + 1,
+					loss_train = str(round(loss_train * 10000)).zfill(4),
+					loss_test = str(round(loss_test * 10000)).zfill(4),
+					accuracy_train = str(round(accuracy_train * 100)).zfill(2),
+					accuracy_test = str(round(accuracy_test * 100)).zfill(2),
+				)
+				
+				print (msg)
 
 			# Epoch callback
 			if train_epoch_callback is not None:
@@ -337,14 +471,16 @@ class AbstractNetwork:
 					self,
 					loss_train=loss_train,
 					loss_test=loss_test,
-					step_index=step_index,
+					accuracy_train=accuracy_train,
+					accuracy_test=accuracy_test,
+					epoch_number=epoch_number,
 					train_data_count=train_data_count,
 				)
 			
 			if not self._do_training:
 				break
 			
-			step_index = step_index + 1
+			epoch_number = epoch_number + 1
 			
 		
 		self._is_trained = True
@@ -362,11 +498,15 @@ class AbstractNetwork:
 		if not os.path.isdir(dir_name):
 			os.makedirs(dir_name)
 		
-		plt.plot( np.multiply(self.history['loss_train'], 100), label='train loss')
-		plt.plot( np.multiply(self.history['loss_test'], 100), label='test loss')
-		plt.ylabel('Percent')
+		fig, axs = plt.subplots(2)
+		axs[0].plot( np.multiply(self.history['loss_train'], 100), label='train loss')
+		axs[0].plot( np.multiply(self.history['loss_test'], 100), label='test loss')
+		axs[0].legend()
+		axs[1].plot( np.multiply(self.history['acc_train'], 100), label='train acc')
+		axs[1].plot( np.multiply(self.history['acc_test'], 100), label='test acc')
+		axs[1].legend()
+		fig.supylabel('Percent')
 		plt.xlabel('Epoch')
-		plt.legend()
 		plt.savefig(history_image)
 		plt.show()
 		
@@ -387,18 +527,11 @@ class AbstractNetwork:
 		
 		return vector_y
 	
-	
-	def check_answer(self, batch_x, batch_y, batch_predict, type):
-		"""
-		Check batch anser
-		"""
-		
-		return 0
 		
 	
 	def control(self,
 		control_dataset=None, control_loader=None,
-		batch_size=32, check_answer=None,
+		batch_size=32, check_answer_batch=None,
 		tensor_device=None,
 		verbose=True
 	):
@@ -423,8 +556,8 @@ class AbstractNetwork:
 				shuffle=False
 			)
 		
-		if check_answer is None:
-			check_answer = self.__class__.check_answer
+		if check_answer_batch is None:
+			check_answer_batch = self.__class__.check_answer_batch
 		
 		# Output answers
 		correct_answers = 0
@@ -439,8 +572,8 @@ class AbstractNetwork:
 			# Вычислим результат модели
 			batch_predict = model(batch_x)
 			
-			if check_answer != None:
-				correct = check_answer(
+			if check_answer_batch != None:
+				correct = check_answer_batch(
 					self,
 					batch_x = batch_x,
 					batch_y = batch_y,
