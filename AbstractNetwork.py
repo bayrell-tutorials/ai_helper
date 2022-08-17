@@ -37,6 +37,7 @@ class AbstractNetwork:
 		self.loss = None
 		self.verbose = True
 		self.max_epochs = 50
+		self.min_epochs = 10
 		self.max_acc = 0.95
 		self.max_acc_rel = 1.5
 		self.min_loss_test = 0.001
@@ -97,11 +98,20 @@ class AbstractNetwork:
 		return self.is_loaded() and self._is_trained
 	
 	
-	def load_dataset(self, type):
+	def load_dataset(self, **kwargs):
 		
 		"""
 		Load dataset
 		"""
+		
+		type = None
+		count = None
+		
+		if "type" in kwargs:
+			type = kwargs["type"]
+		
+		if "count" in kwargs:
+			count = kwargs["count"]
 		
 		if type == "train":
 			
@@ -111,10 +121,10 @@ class AbstractNetwork:
 		
 		if type == "control":
 			
-			self.control_dataset = self.get_control_dataset()
+			self.control_dataset = self.get_control_dataset(count=count)
 	
 	
-	def get_train_dataset(cls):
+	def get_train_dataset(self, **kwargs):
 		
 		"""
 		Returns normalized train and test datasets
@@ -126,7 +136,7 @@ class AbstractNetwork:
 		return train_dataset, test_dataset
 	
 	
-	def get_control_dataset(cls):
+	def get_control_dataset(self, **kwargs):
 		
 		"""
 		Returns normalized control dataset
@@ -153,6 +163,16 @@ class AbstractNetwork:
 		if (self.test_dataset is not None and
 			isinstance(self.test_dataset, TensorDataset)):
 				return self.test_dataset.tensors[0].shape[0]
+		return 1
+	
+	
+	def get_control_data_count(self):
+		"""
+		Returns control data count
+		"""
+		if (self.control_dataset is not None and
+			isinstance(self.control_dataset, TensorDataset)):
+				return self.control_dataset.tensors[0].shape[0]
 		return 1
 	
 	
@@ -273,16 +293,16 @@ class AbstractNetwork:
 		if epoch_number >= self.max_epochs:
 			self.stop_training()
 		
-		if acc_train > self.max_acc:
+		if acc_train > self.max_acc and epoch_number >= self.min_epochs:
 			self.stop_training()
 		
-		if acc_test > self.max_acc:
+		if acc_test > self.max_acc and epoch_number >= self.min_epochs:
 			self.stop_training()
 		
 		if acc_rel > self.max_acc_rel and acc_train > 0.8:
 			self.stop_training()
 		
-		if loss_test < self.min_loss_test and epoch_number >= 5:
+		if loss_test < self.min_loss_test and epoch_number >= self.min_epochs:
 			self.stop_training()
 		
 		pass
@@ -519,6 +539,7 @@ class AbstractNetwork:
 		# Output answers
 		correct_answers = 0
 		total_questions = 0
+		control_data_count = self.get_control_data_count()
 		
 		# Run control dataset
 		for batch_x, batch_y in control_loader:
@@ -540,8 +561,20 @@ class AbstractNetwork:
 				correct_answers = correct_answers + correct
 			
 			total_questions = total_questions + batch_x.shape[0]
-		
-		if verbose:
+			
+			"""
+			correct = correct_answers / total_questions
+			
+			iter_value = total_questions / control_data_count
+			msg = ("\rstep={iter_value}%, correct={rate}%").format(
+				iter_value = round(iter_value * 100),
+				correct = round(correct * 100),
+			)
+			
+			print (msg, end='')
+			"""
+			
+		if verbose and total_questions > 0:
 			print ("Control rate: " +
 				str(correct_answers) + " of " + str(total_questions) + " " +
 				"(" + str(round( correct_answers / total_questions * 100)) + "%)"
