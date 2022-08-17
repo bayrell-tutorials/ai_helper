@@ -1,0 +1,65 @@
+# -*- coding: utf-8 -*-
+
+##
+# Copyright (с) Ildar Bikmamatov 2022
+# License: MIT
+##
+
+from .TrainStatus import TrainStatus
+
+
+class TrainVerboseCallback:
+	
+	
+	def on_end_batch_train(self, train_status:TrainStatus):
+		
+		if train_status.net.verbose:
+			
+			acc_train_value = train_status.get_acc_train_value()
+			loss_train_value = train_status.get_loss_train_value()
+			
+			msg = ("\rStep {epoch_number}, {iter_value}%" +
+				", acc: .{acc}, loss: .{loss}"
+			).format(
+				epoch_number = train_status.epoch_number,
+				iter_value = round(train_status.get_iter_value() * 100),
+				loss = str(round(loss_train_value * 10000)).zfill(4),
+				acc = str(round(acc_train_value * 100)).zfill(2),
+			)
+			
+			print (msg, end='')
+	
+	
+	def on_end_epoch(self, train_status:TrainStatus):
+		
+		"""
+		Epoch
+		"""
+		
+		if train_status.net.verbose:
+			
+			loss_train = train_status.get_loss_train_value()
+			loss_test = train_status.get_loss_test_value()
+			acc_train = train_status.get_acc_train_value()
+			acc_test = train_status.get_acc_test_value()
+			acc_rel = train_status.get_acc_rel()
+			
+			print ("\r", end='')
+			
+			msg = ("Step {epoch_number}, " +
+				"acc: .{acc_train}, " +
+				"acc_test: .{acc_test}, " +
+				"acc_rel: {acc_rel}, " +
+				"loss: .{loss_train}, " +
+				"loss_test: .{loss_test}, "
+			).format(
+				epoch_number = train_status.epoch_number,
+				loss_train = str(round(loss_train * 10000)).zfill(4),
+				loss_test = str(round(loss_test * 10000)).zfill(4),
+				acc_train = str(round(acc_train * 100)).zfill(2),
+				acc_test = str(round(acc_test * 100)).zfill(2),
+				acc_rel = str(round(acc_rel * 100) / 100),
+			)
+			
+			print (msg)
+	

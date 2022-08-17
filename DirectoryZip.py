@@ -7,7 +7,7 @@
 
 import os, zipfile, shutil
 from .Directory import Directory
-from .Utils import indexOf
+from .Utils import index_of
 
 
 class DirectoryZip(Directory):
@@ -51,7 +51,7 @@ class DirectoryZip(Directory):
 		"""
 		if self.zip_file_tmp is not None:
 			for file_name in self.zip_file_namelist:
-				file_index = indexOf(self.zip_file_tmp_namelist, file_name)
+				file_index = index_of(self.zip_file_tmp_namelist, file_name)
 				if file_index == -1:
 					data = self.zip_file.read(file_name)
 					self.zip_file_tmp.writestr(file_name, data)
@@ -105,7 +105,7 @@ class DirectoryZip(Directory):
 		"""
 			Сохраняет поток байтов в zip архив
 		"""
-		index = indexOf(self.zip_file_namelist, file_name)
+		index = index_of(self.zip_file_namelist, file_name)
 		
 		if index == -1:
 			self.zip_file.writestr(file_name, data)
@@ -113,7 +113,7 @@ class DirectoryZip(Directory):
 			
 		else:
 			
-			index = indexOf(self.zip_file_tmp_namelist, file_name)
+			index = index_of(self.zip_file_tmp_namelist, file_name)
 			if index != -1:
 				self.flush()
 				

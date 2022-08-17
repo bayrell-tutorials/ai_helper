@@ -19,7 +19,7 @@ def sign(x):
 	return -1
 	
 	
-def indexOf(arr, item):
+def index_of(arr, item):
 	"""
 	Index of
 	"""
@@ -31,7 +31,7 @@ def indexOf(arr, item):
 	return -1
 	
 	
-def numpy_append(res, data):
+def append_numpy_vector(res, data):
 	
 	"""
 	Append 2 numpy vectors
@@ -45,7 +45,7 @@ def numpy_append(res, data):
 	return res
 	
 	
-def tensorflow_gpu_init(memory_limit=1024):
+def init_tensorflow_gpu(memory_limit=1024):
 	"""
 	Init tensorflow GPU
 	"""
@@ -57,7 +57,7 @@ def tensorflow_gpu_init(memory_limit=1024):
 	    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=memory_limit)])
 
 
-def image_resize_canvas(image, size, color=None):
+def resize_image_canvas(image, size, color=None):
 	
 	"""
 	Resize image canvas
@@ -117,7 +117,7 @@ def image_to_tensor(image_bytes, mode=None):
 	return tensor
 	
 
-def plot_show_image(image, cmap=None):
+def show_image_in_plot(image, cmap=None):
 	"""
 	Plot show image
 	"""

@@ -21,6 +21,9 @@ class AbstractNetwork:
 	def __init__(self):
 		#AbstractNetwork.__init__(self)
 		
+		from .TrainStatus import TrainStatus
+		self.train_status = TrainStatus()
+		self.train_status.net = self
 		self.train_loader = None
 		self.test_loader = None
 		self.control_loader = None
@@ -30,13 +33,12 @@ class AbstractNetwork:
 		self.batch_size = 64
 		self.test_size = 0.1
 		self.model = None
-		self.history = None
 		self.optimizer = None
 		self.loss = None
+		self.verbose = True
 		
 		self._is_debug = False
 		self._is_trained = False
-		self._do_training = True
 		
 		
 	def debug(self, value):
@@ -156,7 +158,6 @@ class AbstractNetwork:
 		self._is_trained = False
 		
 	
-	
 	def summary(self):
 		"""
 		Show model summary
@@ -248,22 +249,22 @@ class AbstractNetwork:
 		return res
 		
 		
-	def train_epoch_callback(self, **kwargs):
+	def on_end_epoch(self, **kwargs):
 		"""
-		Train epoch callback
+		On epoch end
 		"""
 		
-		epoch_number = kwargs["epoch_number"]
-		accuracy_train = kwargs["accuracy_train"]
-		accuracy_test = kwargs["accuracy_test"]
+		epoch_number = self.train_status.epoch_number
+		acc_train = self.train_status.acc_train
+		acc_test = self.train_status.acc_test
 		
 		if epoch_number >= 20:
 			self.stop_training()
 			
-		if accuracy_train > 0.95:
+		if acc_train > 0.95:
 			self.stop_training()
 		
-		if accuracy_test > 0.95:
+		if acc_test > 0.95:
 			self.stop_training()
 		
 		pass
@@ -273,16 +274,10 @@ class AbstractNetwork:
 		"""
 		Stop training
 		"""
-		self._do_training = False
+		self.train_status.stop_train()
 		
 	
-	def train(self,
-		tensor_device=None,
-		verbose=True,
-		train_epoch_callback=None,
-		train_data_count=None,
-		check_answer_batch=None
-	):
+	def train(self, tensor_device=None):
 		
 		"""
 		Train model
@@ -298,9 +293,6 @@ class AbstractNetwork:
 		
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
-		
-		if train_epoch_callback is None:
-			train_epoch_callback = self.__class__.train_epoch_callback
 		
 		if self.train_loader is None and self.train_dataset is not None:
 			self.train_loader = DataLoader(
@@ -320,50 +312,33 @@ class AbstractNetwork:
 		
 		model = self.model.to(tensor_device)
 		
-		if check_answer_batch is None:
-			check_answer_batch = self.__class__.check_answer_batch
-		
-		self.history = {
-			"loss_train": [],
-			"loss_test": [],
-			"acc_train": [],
-			"acc_test": [],
-		}
-		
-		if train_data_count is None:
-			train_data_count = self.get_train_data_count()
-		
 		# Do train
-		self._do_training = True
-		
-		epoch_number = 1
+		train_status = self.train_status
+		train_status.epoch_number = 1
+		train_status.do_training = 1
+		train_status.train_data_count = self.get_train_data_count()
+		train_status.on_start_train()
 		
 		try:
 		
 			while True:
 				
-				batch_train_iter = 0
-				batch_test_iter = 0
-				train_count = 0
-				test_count = 0
-				loss_train = 0
-				loss_test = 0
-				accuracy_train = 0
-				accuracy_test = 0
-
+				train_status.on_start_epoch()
+				
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
-					train_count = train_count + batch_x.shape[0]
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
-
+					
+					train_status.on_start_batch_train(batch_x, batch_y)
+					
 					# Predict model
 					batch_predict = model(batch_x)
 
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					loss_train = loss_train + loss_value.item()
+					train_status.loss_train = train_status.loss_train + loss_value.item()
 					
 					# Gradient
 					self.optimizer.zero_grad()
@@ -372,33 +347,18 @@ class AbstractNetwork:
 					
 					# Calc accuracy
 					accuracy = self.check_answer_batch(
-						epoch_number=epoch_number,
-						batch_iter=batch_train_iter,
-						train_count=train_count,
-						batch_x=batch_x,
-						batch_y=batch_y,
-						batch_predict=batch_predict,
-						train_kind="train",
-						type="train"
+						train_status = train_status,
+						batch_x = batch_x,
+						batch_y = batch_y,
+						batch_predict = batch_predict,
+						train_kind = "train",
+						type = "train"
 					)
-					accuracy_train = accuracy_train + accuracy
-					batch_train_iter = batch_train_iter + 1
+					train_status.acc_train = train_status.acc_train + accuracy
+					train_status.batch_train_iter = train_status.batch_train_iter + 1
+					train_status.train_count = train_status.train_count + batch_x.shape[0]
 					
-					if verbose:
-						
-						accuracy_train_value = accuracy_train / train_count
-						loss_train_value = loss_train / batch_train_iter
-						
-						msg = ("\rStep {epoch_number}, {iter_value}%" +
-							", acc: .{acc}, loss: .{loss}"
-						).format(
-							epoch_number=epoch_number,
-							iter_value=round(train_count / train_data_count * 100),
-							loss=str(round(loss_train_value * 10000)).zfill(4),
-							acc=str(round(accuracy_train_value * 100)).zfill(2),
-						)
-						
-						print (msg, end='')
+					train_status.on_end_batch_train(batch_x, batch_y)
 					
 					del batch_x, batch_y
 					
@@ -410,81 +370,47 @@ class AbstractNetwork:
 				# Test batch
 				for batch_x, batch_y in self.test_loader:
 					
-					test_count = test_count + batch_x.shape[0]
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
-
+					
+					train_status.on_start_batch_test(batch_x, batch_y)
+					
 					# Predict model
 					batch_predict = model(batch_x)
 					
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					loss_test = loss_test + loss_value.item()
-					batch_test_iter = batch_test_iter + 1
+					train_status.loss_test = train_status.loss_test + loss_value.item()
 					
 					# Calc accuracy
 					accuracy = self.check_answer_batch(
-						epoch_number=epoch_number,
-						train_count=test_count,
-						batch_iter=batch_test_iter,
-						batch_x=batch_x,
-						batch_y=batch_y,
-						batch_predict=batch_predict,
-						train_kind="test",
-						type="train"
+						train_status = train_status,
+						batch_x = batch_x,
+						batch_y = batch_y,
+						batch_predict = batch_predict,
+						train_kind = "test",
+						type = "train"
 					)
-					accuracy_test = accuracy_test + accuracy
+					train_status.acc_test = train_status.acc_test + accuracy
+					train_status.batch_test_iter = train_status.batch_test_iter + 1
+					train_status.test_count = train_status.test_count + batch_x.shape[0]
+					
+					train_status.on_end_batch_test(batch_x, batch_y)
+					
+					del batch_x, batch_y
 					
 					# Clear CUDA
 					if torch.cuda.is_available():
 						torch.cuda.empty_cache()
-						
-				# Add history
-				loss_train = loss_train / batch_train_iter
-				loss_test = loss_test / batch_test_iter
-				accuracy_train = accuracy_train / train_count
-				accuracy_test =  accuracy_test / test_count
-				self.history["loss_train"].append(loss_train)
-				self.history["loss_test"].append(loss_test)
-				self.history["acc_train"].append(accuracy_train)
-				self.history["acc_test"].append(accuracy_test)
 				
-				# Output train step info
-				if verbose:
-					print ("\r", end='')
-					
-					msg = ("Step {epoch_number}, " +
-						"acc: .{accuracy_train}, " +
-						"acc_test: .{accuracy_test}, " +
-						"loss: .{loss_train}, " +
-						"loss_test: .{loss_test}"
-					).format(
-						epoch_number = epoch_number,
-						loss_train = str(round(loss_train * 10000)).zfill(4),
-						loss_test = str(round(loss_test * 10000)).zfill(4),
-						accuracy_train = str(round(accuracy_train * 100)).zfill(2),
-						accuracy_test = str(round(accuracy_test * 100)).zfill(2),
-					)
-					
-					print (msg)
-
 				# Epoch callback
-				if train_epoch_callback is not None:
-					train_epoch_callback(
-						self,
-						loss_train=loss_train,
-						loss_test=loss_test,
-						accuracy_train=accuracy_train,
-						accuracy_test=accuracy_test,
-						epoch_number=epoch_number,
-						train_data_count=train_data_count,
-					)
+				train_status.on_end_epoch()
 				
-				if not self._do_training:
+				if not train_status.do_training:
 					break
 				
-				epoch_number = epoch_number + 1
-				
+				train_status.epoch_number = train_status.epoch_number + 1
+			
 			self._is_trained = True
 			
 		except KeyboardInterrupt:
@@ -494,10 +420,11 @@ class AbstractNetwork:
 			print ("")
 			
 			pass
-
+		
+		train_status.on_end_train()
 		
 		
-	def train_show_history(self):
+	def show_train_history(self):
 		
 		"""
 		Show train history
@@ -510,16 +437,17 @@ class AbstractNetwork:
 			os.makedirs(dir_name)
 		
 		fig, axs = plt.subplots(2)
-		axs[0].plot( np.multiply(self.history['loss_train'], 100), label='train loss')
-		axs[0].plot( np.multiply(self.history['loss_test'], 100), label='test loss')
+		axs[0].plot( np.multiply(self.train_status.history['loss_train'], 100), label='train loss')
+		axs[0].plot( np.multiply(self.train_status.history['loss_test'], 100), label='test loss')
 		axs[0].legend()
-		axs[1].plot( np.multiply(self.history['acc_train'], 100), label='train acc')
-		axs[1].plot( np.multiply(self.history['acc_test'], 100), label='test acc')
+		axs[1].plot( np.multiply(self.train_status.history['acc_train'], 100), label='train acc')
+		axs[1].plot( np.multiply(self.train_status.history['acc_test'], 100), label='test acc')
 		axs[1].legend()
 		fig.supylabel('Percent')
 		plt.xlabel('Epoch')
 		plt.savefig(history_image)
 		plt.show()
+		
 		
 		
 	def predict(self, vector_x, tensor_device=None):
@@ -562,9 +490,9 @@ class AbstractNetwork:
 		if control_loader is None and control_dataset is not None:
 			control_loader = DataLoader(
 				control_dataset,
-				batch_size=batch_size,
-				drop_last=False,
-				shuffle=False
+				batch_size = batch_size,
+				drop_last = False,
+				shuffle = False
 			)
 		
 		if check_answer_batch is None:

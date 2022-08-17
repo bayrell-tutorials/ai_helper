@@ -8,8 +8,10 @@
 from .AbstractNetwork import AbstractNetwork
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
-from .Utils import sign, indexOf, numpy_append, tensorflow_gpu_init, \
-	image_resize_canvas, image_to_tensor, plot_show_image, \
+from .TrainStatus import TrainStatus
+from .TrainVerboseCallback import TrainVerboseCallback
+from .Utils import sign, index_of, append_numpy_vector, init_tensorflow_gpu, \
+	resize_image_canvas, image_to_tensor, show_image_in_plot, \
 	get_vector_from_answer, get_answer_from_vector
 
 
@@ -18,9 +20,11 @@ __all__ = (
 	"AbstractNetwork",
 	"Directory",
 	"DirectoryZip",
+	"TrainStatus",
+	"TrainVerboseCallback",
 	
-	"sign", "indexOf", "numpy_append", "tensorflow_gpu_init", \
-	"image_resize_canvas", "image_to_tensor", "plot_show_image", \
+	"sign", "index_of", "append_numpy_vector", "init_tensorflow_gpu", \
+	"resize_image_canvas", "image_to_tensor", "show_image_in_plot", \
 	"get_vector_from_answer", "get_answer_from_vector"
 	
 )
