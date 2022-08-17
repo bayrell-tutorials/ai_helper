@@ -49,25 +49,25 @@ class TrainStatus:
 	def get_iter_value(self):
 		return self.train_count / self.train_data_count
 	
-	def get_loss_train_value(self):
+	def get_loss_train(self):
 		return self.loss_train / self.batch_train_iter
 	
-	def get_loss_test_value(self):
+	def get_loss_test(self):
 		return self.loss_test / self.batch_test_iter
 	
-	def get_acc_train_value(self):
+	def get_acc_train(self):
 		if self.train_count == 0:
 			return 0
 		return self.acc_train / self.train_count
 	
-	def get_acc_test_value(self):
+	def get_acc_test(self):
 		if self.test_count == 0:
 			return 0
 		return self.acc_test / self.test_count
 	
 	def get_acc_rel(self):
-		acc_train = self.get_acc_train_value()
-		acc_test = self.get_acc_test_value()
+		acc_train = self.get_acc_train()
+		acc_test = self.get_acc_test()
 		if acc_test == 0:
 			return 0
 		return acc_train / acc_test
@@ -113,10 +113,10 @@ class TrainStatus:
 		"""
 		End epoch event
 		"""
-		loss_train = self.get_loss_train_value()
-		loss_test = self.get_loss_test_value()
-		acc_train = self.get_acc_train_value()
-		acc_test = self.get_acc_test_value()
+		loss_train = self.get_loss_train()
+		loss_test = self.get_loss_test()
+		acc_train = self.get_acc_train()
+		acc_test = self.get_acc_test()
 		acc_rel = self.get_acc_rel()
 		self.history["loss_train"].append(loss_train)
 		self.history["loss_test"].append(loss_test)

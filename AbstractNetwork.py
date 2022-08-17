@@ -36,6 +36,12 @@ class AbstractNetwork:
 		self.optimizer = None
 		self.loss = None
 		self.verbose = True
+		self.max_epochs = 50
+		self.max_acc = 0.95
+		self.max_acc_rel = 1.5
+		self.min_loss_test = 0.001
+		self.input_shape = (1)
+		self.output_shape = (1)
 		
 		self._is_debug = False
 		self._is_trained = False
@@ -258,13 +264,25 @@ class AbstractNetwork:
 		acc_train = self.train_status.acc_train
 		acc_test = self.train_status.acc_test
 		
-		if epoch_number >= 20:
-			self.stop_training()
-			
-		if acc_train > 0.95:
+		epoch_number = self.train_status.epoch_number
+		acc_train = self.train_status.get_acc_train()
+		acc_test = self.train_status.get_acc_test()
+		acc_rel = self.train_status.get_acc_rel()
+		loss_test = self.train_status.loss_test
+		
+		if epoch_number >= self.max_epochs:
 			self.stop_training()
 		
-		if acc_test > 0.95:
+		if acc_train > self.max_acc:
+			self.stop_training()
+		
+		if acc_test > self.max_acc:
+			self.stop_training()
+		
+		if acc_rel > self.max_acc_rel and acc_train > 0.8:
+			self.stop_training()
+		
+		if loss_test < self.min_loss_test and epoch_number >= 5:
 			self.stop_training()
 		
 		pass

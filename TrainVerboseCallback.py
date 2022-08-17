@@ -15,16 +15,16 @@ class TrainVerboseCallback:
 		
 		if train_status.net.verbose:
 			
-			acc_train_value = train_status.get_acc_train_value()
-			loss_train_value = train_status.get_loss_train_value()
+			acc_train = train_status.get_acc_train()
+			loss_train = train_status.get_loss_train()
 			
 			msg = ("\rStep {epoch_number}, {iter_value}%" +
 				", acc: .{acc}, loss: .{loss}"
 			).format(
 				epoch_number = train_status.epoch_number,
 				iter_value = round(train_status.get_iter_value() * 100),
-				loss = str(round(loss_train_value * 10000)).zfill(4),
-				acc = str(round(acc_train_value * 100)).zfill(2),
+				loss = str(round(loss_train * 10000)).zfill(4),
+				acc = str(round(acc_train * 100)).zfill(2),
 			)
 			
 			print (msg, end='')
@@ -38,10 +38,10 @@ class TrainVerboseCallback:
 		
 		if train_status.net.verbose:
 			
-			loss_train = train_status.get_loss_train_value()
-			loss_test = train_status.get_loss_test_value()
-			acc_train = train_status.get_acc_train_value()
-			acc_test = train_status.get_acc_test_value()
+			loss_train = train_status.get_loss_train()
+			loss_test = train_status.get_loss_test()
+			acc_train = train_status.get_acc_train()
+			acc_test = train_status.get_acc_test()
 			acc_rel = train_status.get_acc_rel()
 			
 			print ("\r", end='')
