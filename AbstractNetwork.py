@@ -43,6 +43,7 @@ class AbstractNetwork:
 		self.min_loss_test = 0.001
 		self.input_shape = (1)
 		self.output_shape = (1)
+		self.onnx_opset_version = 9
 		
 		self._is_debug = False
 		self._is_trained = False
@@ -82,6 +83,13 @@ class AbstractNetwork:
 		Returns model path
 		"""
 		return self.get_name() + ".zip"
+	
+	
+	def get_path_onnx(self):
+		"""
+		Returns model onnx path
+		"""
+		return self.get_name() + ".onnx"
 	
 	
 	def is_loaded(self):
@@ -207,6 +215,38 @@ class AbstractNetwork:
 				os.makedirs(dir_name)
 			
 			torch.save(self.model.state_dict(), file_name)
+	
+	
+	def save_onnx(self, tensor_device=None):
+		
+		"""
+		Save model to onnx file
+		"""
+		
+		import torch, torch.onnx
+		
+		if tensor_device is None:
+			tensor_device = self.get_tensor_device()
+		
+		onnx_model_path = self.get_path_onnx()
+		
+		# Prepare data input
+		data_input = torch.zeros(self.input_shape).to(torch.float32)
+		data_input = data_input[None,:]
+		
+		# Move to tensor device
+		model = self.model.to(tensor_device)
+		data_input = data_input.to(tensor_device)
+		
+		torch.onnx.export(
+			model,
+			data_input,
+			onnx_model_path,
+			opset_version = self.onnx_opset_version,
+			input_names = ['input'],
+			output_names = ['output'],
+			verbose=False
+		)
 	
 	
 	def load(self, file_name=None):
