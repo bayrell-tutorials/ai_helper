@@ -11,9 +11,7 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader, TensorDataset
 from torchsummary import summary
-
-from ai_helper import *
-
+from .Utils import *
 
 class AbstractNetwork:
 	

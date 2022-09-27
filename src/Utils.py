@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import math, io, torch
+import math, io, torch, os
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
@@ -29,6 +29,13 @@ def index_of(arr, item):
 	except Exception:
 		pass
 	return -1
+	
+	
+def indexOf(arr, item):
+	"""
+	Index of
+	"""
+	return index_of(arr, item)
 	
 	
 def append_numpy_vector(res, data):
@@ -155,3 +162,105 @@ def get_answer_from_vector(vector):
 			value_max = value
 	
 	return value_index
+	
+	
+def list_files(path="", recursive=True):
+	"""
+		Returns files in folder
+	"""
+	def read_dir(path, recursive=True):
+		res = []
+		items = os.listdir(path)
+		for item in items:
+			
+			item_path = os.path.join(path, item)
+			
+			if item_path == "." or item_path == "..":
+				continue
+			
+			if os.path.isdir(item_path):
+				if recursive:
+					res = res + read_dir(item_path, recursive)
+			else:
+				res.append(item_path)
+			
+		return res
+	
+	try:
+		items = read_dir( path, recursive )
+			
+		def f(item):
+			return item[len(path + "/"):]
+		
+		items = list( map(f, items) )
+	
+	except Exception:
+		items = []
+	
+	return items
+
+
+
+def list_dirs(path=""):
+	"""
+		Returns dirs in folder
+	"""
+	try:
+		items = os.listdir(path)
+	except Exception:
+		items = []
+	return items
+
+
+def save_bytes(file_name, data):
+	"""
+		Save bytes to file
+	"""
+	file_dir = os.path.dirname(file_name)
+	
+	if not os.path.isdir(file_dir):
+		os.makedirs(file_dir)
+	
+	f = open(file_name, 'wb')
+	f.write(data)
+	f.close()
+	
+
+def read_bytes(file_name):
+	"""
+		Load bytes from file
+	"""
+	
+	f = open(file_name, 'rb')
+	data = f.read()
+	f.close()
+	
+	return data
+	
+	
+def save_file(file_name, data):
+	"""
+		Save file
+	"""
+	bytes = None
+	
+	if isinstance(data, Image.Image):
+		tmp = io.BytesIO()
+		data.save(tmp, format='PNG')
+		bytes = tmp.getvalue()
+	
+	if (isinstance(data, str)):
+		bytes = data.encode("utf-8")
+	
+	if bytes is not None:
+		save_bytes(file_name, bytes)
+	
+	pass
+
+
+
+def read_file(file_name):
+	"""
+		Read file
+	"""
+	return read_bytes(file_name)
