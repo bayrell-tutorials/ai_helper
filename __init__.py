@@ -5,7 +5,8 @@
 # License: MIT
 ##
 
-from .src.AbstractNetwork import AbstractNetwork
+from .src.AbstractModel import AbstractModel
+from .src.ChunkLoader import ChunkLoader
 from .src.Directory import Directory
 from .src.DirectoryZip import DirectoryZip
 from .src.TrainStatus import TrainStatus
@@ -18,7 +19,8 @@ from .src.Utils import sign, index_of, indexOf, append_numpy_vector, init_tensor
 
 __all__ = (
 	
-	"AbstractNetwork",
+	"AbstractModel",
+	"ChunkLoader",
 	"Directory",
 	"DirectoryZip",
 	"TrainStatus",

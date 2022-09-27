@@ -11,14 +11,14 @@ import os, math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .AbstractNetwork import AbstractNetwork
+from .AbstractModel import AbstractModel
 
 
-class KerasModel(AbstractNetwork):
+class KerasModel(AbstractModel):
 	
 	def __init__(self):
 		
-		AbstractNetwork.__init__(self)
+		AbstractModel.__init__(self)
 		
 		self._is_new = True
 		self.model = None

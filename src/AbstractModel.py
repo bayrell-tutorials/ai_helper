@@ -13,11 +13,12 @@ from torch.utils.data import DataLoader, TensorDataset
 from torchsummary import summary
 from .Utils import *
 
-class AbstractNetwork:
+
+class AbstractModel:
 	
 	
 	def __init__(self):
-		#AbstractNetwork.__init__(self)
+		#AbstractModel.__init__(self)
 		
 		from .TrainStatus import TrainStatus
 		self.train_status = TrainStatus()

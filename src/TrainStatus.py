@@ -5,12 +5,12 @@
 # License: MIT
 ##
 
-from .AbstractNetwork import AbstractNetwork
+from .AbstractModel import AbstractModel
 
 
 class TrainStatus:
 	
-	net: AbstractNetwork = None
+	net: AbstractModel = None
 	batch_train_iter = 0
 	batch_test_iter = 0
 	train_count = 0
