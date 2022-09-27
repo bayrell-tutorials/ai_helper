@@ -14,12 +14,12 @@ case "$1" in
 	install)
 		python3.8 setup.py sdist bdist_wheel
 		echo "Install. Need root password"
-		sudo pip3.8 install dist/ai_helper-$version.tar.gz
+		sudo pip3.8 install dist/tiny_ai_helper-$version.tar.gz
 	;;
 	
 	uninstall)
 		echo "Uninstall. Need root password"
-		sudo pip3.8 uninstall ai_helper
+		sudo pip3.8 uninstall tiny_ai_helper
 	;;
 	
 	install-dev)
@@ -31,10 +31,10 @@ case "$1" in
 	;;
 	
 	upload)
-		twine check dist/ai_helper-$version.tar.gz
-		twine check dist/ai_helper-$version-py3-none-any.whl
-		twine upload -r pypi dist/ai_helper-$version.tar.gz
-		twine upload -r pypi dist/ai_helper-$version-py3-none-any.whl
+		twine check dist/tiny_ai_helper-$version.tar.gz
+		twine check dist/tiny_ai_helper-$version-py3-none-any.whl
+		twine upload -r pypi dist/tiny_ai_helper-$version.tar.gz
+		twine upload -r pypi dist/tiny_ai_helper-$version-py3-none-any.whl
 	;;
 	
 	clean)

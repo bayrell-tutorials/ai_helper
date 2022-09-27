@@ -2,5 +2,5 @@
 
 Install
 ```
-sudo pip3.8 install --upgrade ai-helper
+sudo pip3.8 install --upgrade tiny-ai-helper
 ```

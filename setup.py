@@ -10,9 +10,9 @@ from setuptools import setup, find_packages
 from os.path import abspath, dirname, join
 
 setup(
-	name="ai_helper",
+	name="tiny_ai_helper",
 	version="0.0.1",
-	description="AI Helper for PyTorch",
+	description="Tiny AI Helper for PyTorch",
 	long_description=open(join(abspath(dirname(__file__)), 'README.md'), encoding='utf-8').read(),
 	long_description_content_type='text/markdown',
 	author="Ildar Bikmamatov",
