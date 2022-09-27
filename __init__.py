@@ -5,12 +5,12 @@
 # License: MIT
 ##
 
-from .AbstractNetwork import AbstractNetwork
-from .Directory import Directory
-from .DirectoryZip import DirectoryZip
-from .TrainStatus import TrainStatus
-from .TrainVerboseCallback import TrainVerboseCallback
-from .Utils import sign, index_of, append_numpy_vector, init_tensorflow_gpu, \
+from src.AbstractNetwork import AbstractNetwork
+from src.Directory import Directory
+from src.DirectoryZip import DirectoryZip
+from src.TrainStatus import TrainStatus
+from src.TrainVerboseCallback import TrainVerboseCallback
+from src.Utils import sign, index_of, append_numpy_vector, init_tensorflow_gpu, \
 	resize_image_canvas, image_to_tensor, show_image_in_plot, \
 	get_vector_from_answer, get_answer_from_vector
 
