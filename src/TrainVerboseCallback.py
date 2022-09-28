@@ -13,7 +13,7 @@ class TrainVerboseCallback:
 	
 	def on_end_batch_train(self, train_status:TrainStatus):
 		
-		if train_status.net.verbose:
+		if train_status.model.verbose:
 			
 			acc_train = train_status.get_acc_train()
 			loss_train = train_status.get_loss_train()
@@ -36,7 +36,7 @@ class TrainVerboseCallback:
 		Epoch
 		"""
 		
-		if train_status.net.verbose:
+		if train_status.model.verbose:
 			
 			loss_train = train_status.get_loss_train()
 			loss_test = train_status.get_loss_test()
