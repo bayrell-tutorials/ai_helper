@@ -23,9 +23,9 @@ class FolderDataset():
 	
 	def __getindex__(self, index):
 		
-		x, y = self.read_tensor(index)
+		data = self.read_data(index)
 		
-		return (x, y)
+		return ( data[0], data[1] )
 	
 	
 	def __len__(self):
@@ -68,6 +68,9 @@ class FolderDataset():
 		Write json
 		"""
 		
+		if not os.path.isdir(self.folder_path):
+			os.makedirs(self.folder_path)
+		
 		json_file_path = os.path.join(self.folder_path, "dataset.json")
 		
 		obj = {
@@ -90,15 +93,16 @@ class FolderDataset():
 		
 		json_file_path = os.path.join(self.folder_path, "dataset.json")
 		
-		with open(json_file_path) as f:
-			obj = json.load(f)
-			self.total_data_count = obj["total_data_count"]
+		if os.path.isfile(json_file_path):
+			with open(json_file_path) as f:
+				obj = json.load(f)
+				self.total_data_count = obj["total_data_count"]
 	
 	
-	def add_tensor(self, x, y):
+	def save_data(self, *data):
 		
 		"""
-		Add tensor
+		Save data
 		"""
 		
 		folder_path = os.path.join(
@@ -110,24 +114,30 @@ class FolderDataset():
 		if not os.path.isdir(folder_path):
 			os.makedirs(folder_path)
 		
-		torch.save([x, y], file_path)
+		torch.save(data, file_path)
 		self.total_data_count = self.total_data_count + 1
 		
 		
-	def read_tensor(self, file_number):
+	def read_data(self, file_number):
 		
 		"""
-		Read tensor by number
+		Read data by number
 		"""
+		
+		res = None
 		
 		file_path = os.path.join(
 			self.folder_path,
-			self.get_folder_path_by_number(self.total_data_count),
-			str(self.total_data_count) + ".data"
+			self.get_folder_path_by_number(file_number),
+			str(file_number) + ".data"
 		);
 		
-		x, y = torch.load(file_path)
-		return (x, y)
+		try:
+			res = torch.load(file_path)
+		except Exception:
+			res = None
+			
+		return res
 
 
 	def clear(self):

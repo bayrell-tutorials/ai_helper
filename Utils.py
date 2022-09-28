@@ -12,29 +12,36 @@ from PIL import Image, ImageDraw
 
 
 def sign(x):
+	
 	"""
 	Sign function
 	"""
+	
 	if x >= 0: return 1
 	return -1
 	
 	
 def index_of(arr, item):
+	
 	"""
 	Index of
 	"""
+	
 	try:
 		index = arr.index(item)
 		return index
 	except Exception:
 		pass
+	
 	return -1
 	
 	
 def indexOf(arr, item):
+	
 	"""
 	Index of
 	"""
+	
 	return index_of(arr, item)
 	
 	
@@ -52,10 +59,32 @@ def append_numpy_vector(res, data):
 	return res
 	
 	
+def append_tensor_data(obj, data):
+	
+	"""
+	Append data
+	"""
+	
+	if data is not None:
+		
+		for index, value in enumerate(data):
+			
+			if torch.is_tensor(value):
+				value = value[None, :]
+				obj[index] = torch.cat( (obj[index], value) )
+				
+			elif isinstance(obj[index], list):
+				obj[index].append(value)
+		
+	return obj
+	
+	
 def init_tensorflow_gpu(memory_limit=1024):
+	
 	"""
 	Init tensorflow GPU
 	"""
+	
 	import tensorflow as tf
 	gpus = tf.config.list_physical_devices('GPU')
 	tf.config.experimental.set_memory_growth(gpus[0], True)
@@ -126,6 +155,7 @@ def image_to_tensor(image_bytes, mode=None):
 	
 
 def show_image_in_plot(image, cmap=None):
+	
 	"""
 	Plot show image
 	"""
@@ -139,11 +169,13 @@ def show_image_in_plot(image, cmap=None):
 	
 
 def get_vector_from_answer(count):
+	
 	"""
 	Returns vector from answer\n
 		1 -> [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]\n
 		5 -> [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
 	"""
+	
 	def f(number):
 		res = [0.0] * count
 		
@@ -156,9 +188,11 @@ def get_vector_from_answer(count):
 
 
 def get_answer_from_vector(vector):
+	
 	"""
 	Returns answer from vector
 	"""
+	
 	value_max = -math.inf
 	value_index = 0
 	for i in range(0, len(vector)):
@@ -171,9 +205,11 @@ def get_answer_from_vector(vector):
 	
 	
 def list_files(path="", recursive=True):
+	
 	"""
 		Returns files in folder
 	"""
+	
 	def read_dir(path, recursive=True):
 		res = []
 		items = os.listdir(path)
@@ -208,9 +244,11 @@ def list_files(path="", recursive=True):
 
 
 def list_dirs(path=""):
+	
 	"""
 		Returns dirs in folder
 	"""
+	
 	try:
 		items = os.listdir(path)
 	except Exception:
@@ -219,9 +257,11 @@ def list_dirs(path=""):
 
 
 def save_bytes(file_name, data):
+	
 	"""
 		Save bytes to file
 	"""
+	
 	file_dir = os.path.dirname(file_name)
 	
 	if not os.path.isdir(file_dir):
@@ -233,6 +273,7 @@ def save_bytes(file_name, data):
 	
 
 def read_bytes(file_name):
+	
 	"""
 		Load bytes from file
 	"""
@@ -245,9 +286,11 @@ def read_bytes(file_name):
 	
 	
 def save_file(file_name, data):
+	
 	"""
 		Save file
 	"""
+	
 	bytes = None
 	
 	if isinstance(data, Image.Image):
@@ -266,9 +309,11 @@ def save_file(file_name, data):
 
 
 def read_file(file_name):
+	
 	"""
 		Read file
 	"""
+	
 	return read_bytes(file_name)
 	
 	
