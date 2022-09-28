@@ -203,6 +203,21 @@ def get_answer_from_vector(vector):
 	
 	return value_index
 	
+
+def layer(*args, **kwargs):
+	
+	"""
+	Define layer
+	"""
+	
+	obj = {
+		"type": "layer",
+		"args": args,
+		"kwargs": kwargs,
+	}
+	
+	return obj
+
 	
 def list_files(path="", recursive=True):
 	
