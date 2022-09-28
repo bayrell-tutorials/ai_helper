@@ -30,7 +30,6 @@ class AbstractModel:
 		self.test_dataset = None
 		self.control_dataset = None
 		self.batch_size = 64
-		self.test_size = 0.1
 		self.model = None
 		self.optimizer = None
 		self.loss = None
@@ -122,9 +121,7 @@ class AbstractModel:
 		
 		if type == "train":
 			
-			self.train_dataset, self.test_dataset = self.get_train_dataset(
-				test_size=self.test_size
-			)
+			self.train_dataset, self.test_dataset = self.get_train_dataset()
 		
 		if type == "control":
 			
