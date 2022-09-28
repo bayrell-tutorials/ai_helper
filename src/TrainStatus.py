@@ -10,7 +10,7 @@ from .AbstractModel import AbstractModel
 
 class TrainStatus:
 	
-	net: AbstractModel = None
+	model: AbstractModel = None
 	batch_train_iter = 0
 	batch_test_iter = 0
 	train_count = 0
@@ -103,7 +103,6 @@ class TrainStatus:
 		"""
 		Start epoch event
 		"""
-		self.clear_iter()
 		for callback in self.callbacks:
 			if hasattr(callback, "on_start_epoch"):
 				callback.on_start_epoch(self)
@@ -123,7 +122,7 @@ class TrainStatus:
 		self.history["acc_train"].append(acc_train)
 		self.history["acc_test"].append(acc_test)
 		self.history["acc_rel"].append(acc_rel)
-		self.net.on_end_epoch()
+		self.model.on_end_epoch()
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_epoch"):

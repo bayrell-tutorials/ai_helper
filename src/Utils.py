@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import math, io, torch, os
+import math, io, torch, os, re, torch
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
@@ -118,6 +118,7 @@ def image_to_tensor(image_bytes, mode=None):
 		image = image.convert(mode)
 	
 	tensor = torch.from_numpy( np.array(image) )
+	tensor = tensor.to(torch.uint8)
 	
 	del image
 	
@@ -128,6 +129,11 @@ def show_image_in_plot(image, cmap=None):
 	"""
 	Plot show image
 	"""
+	
+	if torch.is_tensor(image):
+		#image = image * 255.0
+		image = image.type(torch.int64)
+	
 	plt.imshow(image, cmap)
 	plt.show()
 	
@@ -264,3 +270,32 @@ def read_file(file_name):
 		Read file
 	"""
 	return read_bytes(file_name)
+	
+	
+def get_sort_alphanum_key(name):
+	
+	"""
+	Returns sort alphanum key
+	"""
+	
+	arr = re.split("([0-9]+)", name)
+	
+	for key, value in enumerate(arr):
+		try:
+			value = int(value)
+		except:
+			pass
+		arr[key] = value
+	
+	arr = list(filter(lambda item: item != "", arr))
+	
+	return arr
+
+
+def alphanum_sort(files):
+	
+	"""
+	Alphanum sort
+	"""
+	
+	files.sort(key=get_sort_alphanum_key)

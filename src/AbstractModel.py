@@ -22,7 +22,7 @@ class AbstractModel:
 		
 		from .TrainStatus import TrainStatus
 		self.train_status = TrainStatus()
-		self.train_status.net = self
+		self.train_status.model = self
 		self.train_loader = None
 		self.test_loader = None
 		self.control_loader = None
@@ -320,14 +320,10 @@ class AbstractModel:
 		"""
 		
 		epoch_number = self.train_status.epoch_number
-		acc_train = self.train_status.acc_train
-		acc_test = self.train_status.acc_test
-		
-		epoch_number = self.train_status.epoch_number
 		acc_train = self.train_status.get_acc_train()
 		acc_test = self.train_status.get_acc_test()
 		acc_rel = self.train_status.get_acc_rel()
-		loss_test = self.train_status.loss_test
+		loss_test = self.train_status.get_loss_test()
 		
 		if epoch_number >= self.max_epochs:
 			self.stop_training()
@@ -400,6 +396,7 @@ class AbstractModel:
 		
 			while True:
 				
+				train_status.clear_iter()
 				train_status.on_start_epoch()
 				
 				# Train batch
