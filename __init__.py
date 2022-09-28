@@ -9,6 +9,7 @@ from .src.AbstractModel import AbstractModel
 from .src.ChunkLoader import ChunkLoader
 from .src.Directory import Directory
 from .src.DirectoryZip import DirectoryZip
+from .src.FolderDataset import FolderDataset
 from .src.TrainStatus import TrainStatus
 from .src.TrainVerboseCallback import TrainVerboseCallback
 from .src.Utils import sign, index_of, indexOf, append_numpy_vector, init_tensorflow_gpu, \
@@ -23,6 +24,7 @@ __all__ = (
 	"ChunkLoader",
 	"Directory",
 	"DirectoryZip",
+	"FolderDataset",
 	"TrainStatus",
 	"TrainVerboseCallback",
 	

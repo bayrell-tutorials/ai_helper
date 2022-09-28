@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import torch, os
+import torch, os, math, json
 from .Utils import alphanum_sort
 
 
@@ -18,6 +18,7 @@ class ChunkLoader:
 		Init chunk loader
 		"""
 		
+		self.chunk_folder_names = [1]
 		self.chunk_path = None
 		self.total_data_count = 0
 		self.chunk_number = 0
@@ -95,19 +96,13 @@ class ChunkLoader:
 		self.chunk_number = 0
 		self.total_data_count = 0
 		
-		if self.chunk_path is not None:
-			for file_name in os.listdir(self.chunk_path):
-				
-				file_path = os.path.join(self.chunk_path, file_name)
-				_, file_extension = os.path.splitext(file_name)
+		folder_path_abs = os.path.join(self.chunk_path, self.chunk_prefix)
+		if self.chunk_path != "" and self.chunk_prefix != "" and folder_path_abs != "":
+			if os.path.isdir(folder_path_abs):
+				import shutil
+				shutil.rmtree(folder_path_abs)
 			
-				if file_extension == ".data" and \
-					file_name[:len(self.chunk_prefix)] == self.chunk_prefix:
-					
-					if os.path.isfile(file_path) or os.path.islink(file_path):
-						os.unlink(file_path)
-	
-	
+		
 	def add(self, x, y):
 		
 		"""
@@ -125,27 +120,78 @@ class ChunkLoader:
 		self.total_data_count = self.total_data_count + 1
 		
 		
+	def get_chunk_number_folder(self, chunk_number):
+	
+		chunk_arr = []
+		last = chunk_number
+		
+		for value in self.chunk_folder_names:
+			
+			name = last % pow(10, value)
+			name = str(name).zfill(value)
+			chunk_arr.append(name)
+			
+			last = math.floor(last / pow(10, value))
+			
+		return chunk_arr
+		
+		
 	def flush(self):
 		
 		"""
 		Flush chunk to disk
 		"""
 		
-		if not os.path.isdir(self.chunk_path):
-			os.makedirs(self.chunk_path)
-		
 		if self.data_x.shape[0] > 0:
 			
-			file_name = os.path.join(self.chunk_path,
-				str(self.chunk_prefix) + str(self.chunk_number) + ".data"
-			)
+			chunk_number_folder = self.get_chunk_number_folder(self.chunk_number);
+			chunk_number_folder = os.path.join(*chunk_number_folder)
 			
-			torch.save([self.data_x, self.data_y], file_name)
+			folder_path = os.path.join(self.chunk_prefix, chunk_number_folder)
+			folder_path_abs = os.path.join(self.chunk_path,
+				self.chunk_prefix, chunk_number_folder)
+			
+			if not os.path.isdir(folder_path_abs):
+				os.makedirs(folder_path_abs)
+				
+			file_path = os.path.join(folder_path, str(self.chunk_number) + ".data")
+			file_path_abs = os.path.join(self.chunk_path, file_path)
+			
+			torch.save([self.data_x, self.data_y], file_path_abs)
+			
+			self.chunk_files.append({
+				"file_name":  str(self.chunk_number) + ".data",
+				"file_path": file_path,
+				"chunk_number": self.chunk_number,
+			})
+			
+			self.save_json()
 			
 			self.data_x = torch.tensor([])
 			self.data_y = torch.tensor([])
 			self.chunk_number = self.chunk_number + 1
 			self.set_type(x=self.type_x, y=self.type_y)
+	
+	
+	def save_json(self):
+		
+		"""
+		Save json dataset info to file
+		"""
+		
+		json_file_path = os.path.join(self.chunk_path,
+			self.chunk_prefix, "dataset.json")
+		
+		obj = {
+			"chunk_files": self.chunk_files,
+			"chunk_number": self.chunk_number,
+			"chunk_size": self.chunk_size,
+			"total_data_count": self.total_data_count,
+		}
+		
+		json_object = json.dumps(obj, indent=4)
+		with open(json_file_path, "w") as file:
+			file.write(json_object)
 	
 	
 	def load_chunk(self, chunk_number):
@@ -154,49 +200,57 @@ class ChunkLoader:
 		Load chunk by number
 		"""
 		
-		file_name = os.path.join(self.chunk_path, 
-			str(self.chunk_prefix) + str(chunk_number) + ".data"
+		chunk_number_folder = self.get_chunk_number_folder(self.chunk_number);
+		chunk_number_folder = os.path.join(*chunk_number_folder)
+		
+		file_name = os.path.join(
+			self.chunk_path, self.chunk_prefix, chunk_number_folder,
+			str(chunk_number) + ".data"
 		)
 		
 		return torch.load(file_name)
 		
 	
-	
-	def load_all_chunks(self):
+	def read_json(self):
 		
 		"""
 		Load chunk loader
 		"""
 		
-		files = os.listdir(self.chunk_path)
-		alphanum_sort(files)
+		json_file_path = os.path.join(self.chunk_path,
+			self.chunk_prefix, "dataset.json")
 		
-		self.chunk_files = []
-		self.chunk_number = 0
-		self.total_data_count = 0
-		
-		if self.chunk_path is not None:
-			for file_name in files:
-				
-				file_path = os.path.join(self.chunk_path, file_name)
-				_, file_extension = os.path.splitext(file_name)
+		with open(json_file_path) as f:
+			obj = json.load(f)
 			
-				if file_extension == ".data" and \
-					file_name[:len(self.chunk_prefix)] == self.chunk_prefix:
-					
-					chunk_name = self.get_chunk_name(file_name)
-					
-					self.chunk_files.append({
-						"file_name": file_name,
-						"chunk_name": chunk_name,
-					})
-					
-					self.chunk_number = self.chunk_number + 1
+			self.chunk_files = obj["chunk_files"]
+			self.chunk_number = obj["chunk_number"]
+			self.chunk_size = obj["chunk_size"]
+			self.total_data_count = obj["total_data_count"]
 		
+	
+	def get_dataset(self):
 		
-		if self.chunk_number > 1:
-			first_chunk = self.load_chunk(0)
-			self.chunk_size = first_chunk[0].shape[0]
-			
-		last_chunk = self.load_chunk(self.chunk_number - 1)
-		self.total_data_count = (self.chunk_number - 1) * self.chunk_size + last_chunk[0].shape[0]
+		"""
+		Returns chunk loader dataset
+		"""
+		
+		dataset = ChunkLoaderDataset(self)
+		return dataset
+	
+	
+	
+class ChunkLoaderDataset():
+	
+	def __init__(self, chunk_loader):
+		self.chunk_loader = chunk_loader
+
+	def __getindex__(self, index):
+		
+		x = torch.tensor()
+		y = torch.tensor()
+		
+		return (x, y)
+
+	def __len__(self):
+		return len(self.chunk_loader.total_data_count)
