@@ -183,6 +183,20 @@ class AbstractModel:
 		return 1
 	
 	
+	def convert_batch(self, x=None, y=None):
+		"""
+		Convert batch
+		"""
+		
+		if x is not None:
+			x = x.to(torch.float)
+		
+		if y is not None:
+			y = y.to(torch.float)
+		
+		return x, y
+	
+	
 	def create_model(self):
 		"""
 		Create model
@@ -273,8 +287,6 @@ class AbstractModel:
 		Check answer
 		"""
 		
-		type = kwargs["type"]
-		tensor_x = kwargs["tensor_x"]
 		tensor_y = kwargs["tensor_y"]
 		tensor_predict = kwargs["tensor_predict"]
 		
@@ -297,7 +309,7 @@ class AbstractModel:
 		
 		for i in range(batch_x.shape[0]):
 			
-			tensor_x = batch_x[i] * 256
+			tensor_x = batch_x[i]
 			tensor_y = batch_y[i]
 			tensor_predict = batch_predict[i]
 			
@@ -402,6 +414,7 @@ class AbstractModel:
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
+					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
 					
@@ -425,7 +438,6 @@ class AbstractModel:
 						batch_x = batch_x,
 						batch_y = batch_y,
 						batch_predict = batch_predict,
-						train_kind = "train",
 						type = "train"
 					)
 					train_status.acc_train = train_status.acc_train + accuracy
@@ -444,6 +456,7 @@ class AbstractModel:
 				# Test batch
 				for batch_x, batch_y in self.test_loader:
 					
+					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
 					
@@ -462,8 +475,7 @@ class AbstractModel:
 						batch_x = batch_x,
 						batch_y = batch_y,
 						batch_predict = batch_predict,
-						train_kind = "test",
-						type = "train"
+						type = "test"
 					)
 					train_status.acc_test = train_status.acc_test + accuracy
 					train_status.batch_test_iter = train_status.batch_test_iter + 1
@@ -533,6 +545,8 @@ class AbstractModel:
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
 		
+		vector_x, _ = self.convert_batch(x=vector_x)
+		
 		vector_x = vector_x.to(tensor_device)
 		model = self.model.to(tensor_device)
 		
@@ -579,7 +593,8 @@ class AbstractModel:
 		
 		# Run control dataset
 		for batch_x, batch_y in control_loader:
-
+			
+			batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 			batch_x = batch_x.to(tensor_device)
 			batch_y = batch_y.to(tensor_device)
 			

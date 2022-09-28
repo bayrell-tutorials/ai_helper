@@ -26,6 +26,8 @@ class ChunkLoader:
 		self.chunk_files = []
 		self.data_x = torch.tensor([])
 		self.data_y = torch.tensor([])
+		self.type_x = None
+		self.type_y = None
 	
 	
 	def set_type(self, x=None, y=None):
@@ -35,9 +37,11 @@ class ChunkLoader:
 		"""
 		
 		if x is not None:
+			self.type_x = x
 			self.data_x = self.data_x.type(x)
 		
 		if y is not None:
+			self.type_y = y
 			self.data_y = self.data_y.type(y)
 	
 	
@@ -141,7 +145,7 @@ class ChunkLoader:
 			self.data_x = torch.tensor([])
 			self.data_y = torch.tensor([])
 			self.chunk_number = self.chunk_number + 1
-	
+			self.set_type(x=self.type_x, y=self.type_y)
 	
 	
 	def load_chunk(self, chunk_number):
