@@ -59,6 +59,17 @@ def append_numpy_vector(res, data):
 	return res
 	
 	
+def append_tensor(res, t):
+	
+	"""
+	Append tensor
+	"""
+	
+	t = t[None, :]
+	res = torch.cat( (res, t) )
+	return res
+	
+	
 def append_tensor_data(obj, data):
 	
 	"""

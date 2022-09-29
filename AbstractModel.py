@@ -41,6 +41,7 @@ class AbstractModel:
 		self.min_loss_test = 0.001
 		self.input_shape = (1)
 		self.output_shape = (1)
+		self.onnx_path = "web"
 		self.onnx_opset_version = 9
 		self.model_name = ""
 		
@@ -76,31 +77,31 @@ class AbstractModel:
 		return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 		
 		
-	def get_name(self):
+	def get_model_name(self):
 		
 		"""
 		Returns model name
 		"""
 		
-		return os.path.join("data", "model", self.model_name)
+		return self.model_name
 	
 	
-	def get_path(self):
+	def get_model_path(self):
 		
 		"""
 		Returns model path
 		"""
 		
-		return self.get_name() + ".zip"
+		return os.path.join(os.getcwd(), "data", "model", self.model_name + ".zip")
 	
 	
-	def get_path_onnx(self):
+	def get_onnx_path(self):
 		
 		"""
 		Returns model onnx path
 		"""
 		
-		return self.get_name() + ".onnx"
+		return os.path.join(os.getcwd(), self.onnx_path, self.model_name + ".onnx")
 	
 	
 	def is_loaded(self):
@@ -262,7 +263,7 @@ class AbstractModel:
 		"""
 		
 		if file_name is None:
-			file_name = self.get_path()
+			file_name = self.get_model_path()
 		
 		if self.module:
 			
@@ -284,7 +285,7 @@ class AbstractModel:
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
 		
-		onnx_model_path = self.get_path_onnx()
+		onnx_model_path = self.get_onnx_path()
 		
 		# Prepare data input
 		data_input = torch.zeros(self.input_shape).to(torch.float32)
@@ -312,7 +313,7 @@ class AbstractModel:
 		"""
 		
 		if file_name is None:
-			file_name = self.get_path()
+			file_name = self.get_model_path()
 		
 		self._is_trained = False
 		
@@ -567,7 +568,8 @@ class AbstractModel:
 		Show train history
 		"""
 		
-		history_image = self.get_name() + ".png"
+		file_name, _ = os.path.splitext( self.get_model_path() )
+		history_image = file_name + ".png"
 		
 		dir_name = os.path.dirname(history_image)
 		if not os.path.isdir(dir_name):
@@ -985,7 +987,7 @@ class ExtendModule(torch.nn.Module):
 				
 				layer_factory: AbstractLayerFactory = obj
 				name = layer_factory.get_name()
-				layer_name = str(index) + "_" + name
+				layer_name = str(len(self._layer_shapes)) + "_" + name
 				
 				layer, work_tensor = layer_factory.create_layer(work_tensor, self)
 				
