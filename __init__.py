@@ -5,11 +5,10 @@
 # License: MIT
 ##
 
-from .AbstractModel import AbstractModel
+from .AbstractModel import AbstractModel, ExtendModule, LayerFactory, layer, register_layer_factory
 from .ChunkLoader import ChunkLoader
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
-from .ExtendModel import ExtendModel, layer, LayerFactory, register_layer_factory
 from .FolderDataset import FolderDataset
 from .TrainStatus import TrainStatus
 from .TrainVerboseCallback import TrainVerboseCallback
@@ -22,10 +21,10 @@ from .Utils import sign, index_of, indexOf, append_numpy_vector, init_tensorflow
 __all__ = (
 	
 	"AbstractModel",
+	"ExtendModule",
 	"ChunkLoader",
 	"Directory",
 	"DirectoryZip",
-	"ExtendModel",
 	"FolderDataset",
 	"TrainStatus",
 	"TrainVerboseCallback",

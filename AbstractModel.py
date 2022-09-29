@@ -18,7 +18,6 @@ class AbstractModel:
 	
 	
 	def __init__(self):
-		#AbstractModel.__init__(self)
 		
 		from .TrainStatus import TrainStatus
 		self.train_status = TrainStatus()
@@ -30,7 +29,7 @@ class AbstractModel:
 		self.test_dataset = None
 		self.control_dataset = None
 		self.batch_size = 64
-		self.model = None
+		self.module = None
 		self.optimizer = None
 		self.loss = None
 		self.verbose = True
@@ -42,65 +41,82 @@ class AbstractModel:
 		self.input_shape = (1)
 		self.output_shape = (1)
 		self.onnx_opset_version = 9
+		self.model_name = ""
 		
 		self._is_debug = False
 		self._is_trained = False
 		
 		
 	def debug(self, value):
+		
 		"""
 		Set debug level
 		"""
+		
 		self._is_debug = value
 		
 		
 	def print_debug(self, *args):
+		
 		"""
 		Print if debug level is True
 		"""
+		
 		if self._is_debug:
 			print(*args)
 		
 		
 	def get_tensor_device(self):
+		
 		"""
 		Returns tensor device name
 		"""
+		
 		return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 		
 		
 	def get_name(self):
+		
 		"""
 		Returns model name
 		"""
-		return os.path.join("data", "model")
+		
+		return os.path.join("data", "model", self.model_name)
 	
 	
 	def get_path(self):
+		
 		"""
 		Returns model path
 		"""
+		
 		return self.get_name() + ".zip"
 	
 	
 	def get_path_onnx(self):
+		
 		"""
 		Returns model onnx path
 		"""
+		
 		return self.get_name() + ".onnx"
 	
 	
 	def is_loaded(self):
+		
 		"""
 		Returns true if model is loaded
 		"""
-		return self.model is not None
+		
+		return self.module is not None
 	
 	
 	def is_trained(self):
+		
 		"""
 		Returns true if model is loaded
 		"""
+		
 		return self.is_loaded() and self._is_trained
 	
 	
@@ -151,9 +167,11 @@ class AbstractModel:
 		
 	
 	def get_train_data_count(self):
+		
 		"""
 		Returns train data count
 		"""
+		
 		if (self.train_dataset is not None and
 			isinstance(self.train_dataset, TensorDataset)):
 				return self.train_dataset.tensors[0].shape[0]
@@ -161,9 +179,11 @@ class AbstractModel:
 	
 	
 	def get_test_data_count(self):
+		
 		"""
 		Returns test data count
 		"""
+		
 		if (self.test_dataset is not None and
 			isinstance(self.test_dataset, TensorDataset)):
 				return self.test_dataset.tensors[0].shape[0]
@@ -171,9 +191,11 @@ class AbstractModel:
 	
 	
 	def get_control_data_count(self):
+		
 		"""
 		Returns control data count
 		"""
+		
 		if (self.control_dataset is not None and
 			isinstance(self.control_dataset, TensorDataset)):
 				return self.control_dataset.tensors[0].shape[0]
@@ -181,6 +203,7 @@ class AbstractModel:
 	
 	
 	def convert_batch(self, x=None, y=None):
+		
 		"""
 		Convert batch
 		"""
@@ -195,18 +218,39 @@ class AbstractModel:
 	
 	
 	def create_model(self):
+		
 		"""
 		Create model
 		"""
-		self.model = None
-		self._is_trained = False
 		
+		self.module = None
+		self._is_trained = False
+	
+	
+	def create_model_ex(self, model_name="", layers=[], debug=False):
+		
+		"""
+		Create extended model
+		"""
+		
+		self.model_name = model_name
+		self.module = ExtendModule(self)
+		self.module.init_layers(layers, debug=debug)
+		
+		pass
+	
 	
 	def summary(self):
+		
 		"""
 		Show model summary
 		"""
-		summary(self.model)
+		
+		summary(self.module)
+		
+		if (isinstance(self.module, ExtendModule)):
+			for arr in self.module._layer_shapes:
+				print ( arr[0] + " => " + str(tuple(arr[1])) )
 	
 	
 	def save(self, file_name=None):
@@ -218,13 +262,13 @@ class AbstractModel:
 		if file_name is None:
 			file_name = self.get_path()
 		
-		if self.model:
+		if self.module:
 			
 			dir_name = os.path.dirname(file_name)
 			if not os.path.isdir(dir_name):
 				os.makedirs(dir_name)
 			
-			torch.save(self.model.state_dict(), file_name)
+			torch.save(self.module.state_dict(), file_name)
 	
 	
 	def save_onnx(self, tensor_device=None):
@@ -245,7 +289,7 @@ class AbstractModel:
 		data_input = data_input[None,:]
 		
 		# Move to tensor device
-		model = self.model.to(tensor_device)
+		model = self.module.to(tensor_device)
 		data_input = data_input.to(tensor_device)
 		
 		torch.onnx.export(
@@ -271,8 +315,8 @@ class AbstractModel:
 		self._is_trained = False
 		
 		try:
-			if os.path.isfile(file_name) and self.model:
-				self.model.load_state_dict(torch.load(file_name))
+			if os.path.isfile(file_name) and self.module:
+				self.module.load_state_dict(torch.load(file_name))
 				self._is_trained = True
 		
 		except:
@@ -280,6 +324,7 @@ class AbstractModel:
 		
 		
 	def check_answer(self, **kwargs):
+		
 		"""
 		Check answer
 		"""
@@ -294,9 +339,11 @@ class AbstractModel:
 		
 		
 	def check_answer_batch(self, **kwargs):
+		
 		"""
 		Check batch. Returns count right answers
 		"""
+		
 		res = 0
 		
 		type = kwargs["type"]
@@ -324,6 +371,7 @@ class AbstractModel:
 		
 		
 	def on_end_epoch(self, **kwargs):
+		
 		"""
 		On epoch end
 		"""
@@ -353,9 +401,11 @@ class AbstractModel:
 		
 		
 	def stop_training(self):
+		
 		"""
 		Stop training
 		"""
+		
 		self.train_status.stop_train()
 		
 	
@@ -367,7 +417,7 @@ class AbstractModel:
 		
 		# Adam optimizer
 		if self.optimizer is None:
-			self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+			self.optimizer = torch.optim.Adam(self.module.parameters(), lr=1e-3)
 		
 		# Mean squared error
 		if self.loss is None:
@@ -392,7 +442,7 @@ class AbstractModel:
 				shuffle=False
 			)
 		
-		model = self.model.to(tensor_device)
+		module = self.module.to(tensor_device)
 		
 		# Do train
 		train_status = self.train_status
@@ -418,7 +468,7 @@ class AbstractModel:
 					train_status.on_start_batch_train(batch_x, batch_y)
 					
 					# Predict model
-					batch_predict = model(batch_x)
+					batch_predict = module(batch_x)
 
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
@@ -460,7 +510,7 @@ class AbstractModel:
 					train_status.on_start_batch_test(batch_x, batch_y)
 					
 					# Predict model
-					batch_predict = model(batch_x)
+					batch_predict = module(batch_x)
 					
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
@@ -545,9 +595,9 @@ class AbstractModel:
 		vector_x, _ = self.convert_batch(x=vector_x)
 		
 		vector_x = vector_x.to(tensor_device)
-		model = self.model.to(tensor_device)
+		module = self.module.to(tensor_device)
 		
-		vector_y = model(vector_x)
+		vector_y = module(vector_x)
 		
 		return vector_y
 	
@@ -567,7 +617,7 @@ class AbstractModel:
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
 			
-		model = self.model.to(tensor_device)
+		model = self.module.to(tensor_device)
 		
 		if control_dataset is None:
 			control_dataset = self.control_dataset
@@ -630,3 +680,261 @@ class AbstractModel:
 		
 		return correct_answers, total_questions
 
+
+LayerFactory_items = {}
+
+
+def register_layer_factory(key, value):
+	
+	"""
+	Regisyer layer factory
+	"""
+	
+	LayerFactory_items[key] = value
+
+
+class LayerFactory:
+	
+	def __init__(self, *args, **kwargs):
+		
+		"""
+		Init
+		"""
+		
+		self.args = args
+		self.kwargs = kwargs
+	
+	
+	def get_name(self):
+		
+		"""
+		Returns name
+		"""
+		
+		return self.args[0]
+	
+	
+	def create_layer(self, work_tensor, module):
+		
+		"""
+		Create layer
+		"""
+		
+		layer_out = None
+		name = self.get_name()
+		
+		if name in LayerFactory_items:
+			factory_callback = LayerFactory_items[name]
+			layer_out, work_tensor = factory_callback.create_layer(
+				self, work_tensor, module
+			)
+			
+		return layer_out, work_tensor
+
+
+class Factory_Conv3d:
+
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+		
+		"""
+		Returns Conv3d
+		"""
+		
+		in_channels = work_tensor.shape[1]
+		out_channels = factory.args[1]
+		kwargs = factory.kwargs
+		
+		layer_out = torch.nn.Conv3d(
+			in_channels=in_channels,
+			out_channels=out_channels,
+			**kwargs
+		)
+		
+		work_tensor = layer_out(work_tensor)
+		
+		return layer_out, work_tensor
+
+
+class Factory_Conv2d:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	
+		"""
+		Returns Conv2d
+		"""
+		
+		in_channels = work_tensor.shape[1]
+		out_channels = factory.args[1]
+		kwargs = factory.kwargs
+		
+		layer_out = torch.nn.Conv2d(
+			in_channels=in_channels,
+			out_channels=out_channels,
+			**kwargs
+		)
+		
+		work_tensor = layer_out(work_tensor)
+		
+		return layer_out, work_tensor
+
+
+class Factory_Dropout:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	
+		"""
+		Returns Dropout
+		"""
+		
+		p = factory.args[1]
+		kwargs = factory.kwargs
+		
+		layer_out = torch.nn.Dropout(p=p, **kwargs)
+		
+		return layer_out, work_tensor
+
+
+class Factory_MaxPool2d:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	
+		"""
+		Returns MaxPool2d
+		"""
+		
+		kwargs = factory.kwargs
+		layer_out = torch.nn.MaxPool2d(**kwargs)
+		
+		work_tensor = layer_out(work_tensor)
+		
+		return layer_out, work_tensor
+
+
+class Factory_Flat:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+		
+		args = factory.args
+		pos = args[1] if len(args) >= 2 else 1
+		
+		if pos < 0:
+			pos = pos - 1
+		
+		shape = list(work_tensor.shape)
+		shape = shape[:pos]
+		shape.append(-1)
+		
+		work_tensor = work_tensor.reshape( shape )
+		
+		return None, work_tensor
+
+
+class Factory_InsertFirstAxis:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+		
+		work_tensor = work_tensor[:,None,:]
+		
+		return None, work_tensor
+
+
+class Factory_Linear:
+	
+	def create_layer(self, factory:LayerFactory, work_tensor, module):
+		
+		in_features = work_tensor.shape[1]
+		out_features = factory.args[1]
+		
+		layer_out = torch.nn.Linear(
+			in_features=in_features,
+			out_features=out_features
+		)
+		
+		work_tensor = layer_out(work_tensor)
+		
+		return layer_out, work_tensor
+	
+
+
+"""
+Register factories
+"""
+
+register_layer_factory("Conv3d", Factory_Conv3d())
+register_layer_factory("Conv2d", Factory_Conv2d())
+register_layer_factory("Dropout", Factory_Dropout())
+register_layer_factory("MaxPool2d", Factory_MaxPool2d())
+register_layer_factory("Flat", Factory_Flat())
+register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis())
+register_layer_factory("Linear", Factory_Linear())
+
+
+
+def layer(*args, **kwargs):
+	
+	"""
+	Define layer
+	"""
+	
+	return LayerFactory(*args, **kwargs)
+
+
+
+class ExtendModule(torch.nn.Module):
+	
+	def __init__(self, model):
+		
+		"""
+		Constructor
+		"""
+		
+		super(ExtendModule, self).__init__()
+		
+		self._model = model
+		self._layer_shapes = []
+		
+	
+	def forward(self, x):
+		
+		"""
+		Forward model
+		"""
+		
+		return x
+	
+	
+	def init_layers(self, layers, debug=False):
+		
+		"""
+		Init layers
+		"""
+		
+		input_shape = self._model.input_shape
+		output_shape = self._model.output_shape
+		
+		arr = list(input_shape)
+		arr.insert(0, 1)
+		
+		work_tensor = torch.zeros( tuple(arr) )
+		self._layer_shapes.append( ("Input", work_tensor.shape) )
+		
+		if debug:
+			print ("Input:" + " " + str( tuple(work_tensor.shape) ))
+		
+		for index, obj in enumerate(layers):
+			
+			if isinstance(obj, LayerFactory):
+				
+				layer_factory: LayerFactory = obj
+				name = layer_factory.get_name()
+				layer_name = str(index) + "_" + name
+				
+				layer, work_tensor = layer_factory.create_layer(work_tensor, self)
+				
+				self._layer_shapes.append( (layer_name, work_tensor.shape) )
+				
+				if debug:
+					print (layer_name + " => " + str(tuple(work_tensor.shape)))
+				
+				if layer:
+					self.add_module(layer_name, layer)
