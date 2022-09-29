@@ -24,10 +24,8 @@ class AbstractModel:
 		self.train_status.model = self
 		self.train_loader = None
 		self.test_loader = None
-		self.control_loader = None
 		self.train_dataset = None
 		self.test_dataset = None
-		self.control_dataset = None
 		self.batch_size = 64
 		self.module = None
 		self.optimizer = None
@@ -140,10 +138,6 @@ class AbstractModel:
 		if type == "train":
 			
 			self.train_dataset, self.test_dataset = self.get_train_dataset()
-		
-		if type == "control":
-			
-			self.control_dataset = self.get_control_dataset(count=count)
 	
 	
 	def get_train_dataset(self, **kwargs):
@@ -157,16 +151,6 @@ class AbstractModel:
 		
 		return train_dataset, test_dataset
 	
-	
-	def get_control_dataset(self, **kwargs):
-		
-		"""
-		Returns normalized control dataset
-		"""
-		
-		dataset = TensorDataset( torch.tensor(), torch.tensor() )
-		return dataset
-		
 	
 	def get_train_data_count(self):
 		
@@ -190,18 +174,6 @@ class AbstractModel:
 		if (self.test_dataset is not None and
 			isinstance(self.test_dataset, TensorDataset)):
 				return self.test_dataset.tensors[0].shape[0]
-		return 1
-	
-	
-	def get_control_data_count(self):
-		
-		"""
-		Returns control data count
-		"""
-		
-		if (self.control_dataset is not None and
-			isinstance(self.control_dataset, TensorDataset)):
-				return self.control_dataset.tensors[0].shape[0]
 		return 1
 	
 	
@@ -420,7 +392,7 @@ class AbstractModel:
 		
 		# Adam optimizer
 		if self.optimizer is None:
-			self.optimizer = torch.optim.Adam(self.module.parameters(), lr=1e-3)
+			self.optimizer = torch.optim.Adam(self.module.parameters(), lr=3e-4)
 		
 		# Mean squared error
 		if self.loss is None:
@@ -607,84 +579,24 @@ class AbstractModel:
 		
 		return vector_y
 	
-		
+
+
+def do_train(model:AbstractModel, summary=False):
 	
-	def control(self,
-		control_dataset=None, control_loader=None,
-		batch_size=32, check_answer_batch=None,
-		tensor_device=None,
-		verbose=True
-	):
+	"""
+	Start training
+	"""
+	
+	if summary:
+		model.summary()
+			
+	# Load dataset
+	model.load_dataset(type="train")
+	
+	# Train the model
+	model.train()
+	model.show_train_history()
 		
-		"""
-		Control model
-		"""
-		
-		if tensor_device is None:
-			tensor_device = self.get_tensor_device()
-			
-		model = self.module.to(tensor_device)
-		
-		if control_dataset is None:
-			control_dataset = self.control_dataset
-		
-		if control_loader is None and control_dataset is not None:
-			control_loader = DataLoader(
-				control_dataset,
-				batch_size = batch_size,
-				drop_last = False,
-				shuffle = False
-			)
-		
-		if check_answer_batch is None:
-			check_answer_batch = self.__class__.check_answer_batch
-		
-		# Output answers
-		correct_answers = 0
-		total_questions = 0
-		control_data_count = self.get_control_data_count()
-		
-		# Run control dataset
-		for batch_x, batch_y in control_loader:
-			
-			batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
-			batch_x = batch_x.to(tensor_device)
-			batch_y = batch_y.to(tensor_device)
-			
-			# Вычислим результат модели
-			batch_predict = model(batch_x)
-			
-			if check_answer_batch != None:
-				correct = check_answer_batch(
-					self,
-					batch_x = batch_x,
-					batch_y = batch_y,
-					batch_predict = batch_predict,
-					type="control"
-				)
-				correct_answers = correct_answers + correct
-			
-			total_questions = total_questions + batch_x.shape[0]
-			
-			"""
-			correct = correct_answers / total_questions
-			
-			iter_value = total_questions / control_data_count
-			msg = ("\rstep={iter_value}%, correct={rate}%").format(
-				iter_value = round(iter_value * 100),
-				correct = round(correct * 100),
-			)
-			
-			print (msg, end='')
-			"""
-			
-		if verbose and total_questions > 0:
-			print ("Control rate: " +
-				str(correct_answers) + " of " + str(total_questions) + " " +
-				"(" + str(round( correct_answers / total_questions * 100)) + "%)"
-			)
-		
-		return correct_answers, total_questions
 
 
 layers_factories = {}

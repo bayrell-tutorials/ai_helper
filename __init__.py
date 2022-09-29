@@ -6,7 +6,7 @@
 ##
 
 from .AbstractModel import AbstractModel, ExtendModule, AbstractLayerFactory, \
-	layer, register_layer_factory
+	layer, register_layer_factory, do_train
 from .ChunkLoader import ChunkLoader
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
@@ -31,7 +31,7 @@ __all__ = (
 	"TrainStatus",
 	"TrainVerboseCallback",
 	
-	"layer", "register_layer_factory",
+	"layer", "register_layer_factory", "do_train",
 	"sign", "index_of", "indexOf", "append_numpy_vector", "init_tensorflow_gpu",
 	"resize_image_canvas", "image_to_tensor", "show_image_in_plot", "append_tensor_data",
 	"get_vector_from_answer", "get_answer_from_vector", "alphanum_sort", "append_tensor",
