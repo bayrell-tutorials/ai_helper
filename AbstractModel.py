@@ -681,7 +681,7 @@ class AbstractModel:
 		return correct_answers, total_questions
 
 
-LayerFactory_items = {}
+layers_factories = {}
 
 
 def register_layer_factory(key, value):
@@ -690,15 +690,25 @@ def register_layer_factory(key, value):
 	Regisyer layer factory
 	"""
 	
-	LayerFactory_items[key] = value
+	layers_factories[key] = value
 
 
-class LayerFactory:
+class AbstractLayerFactory:
 	
-	def __init__(self, *args, **kwargs):
+	
+	def __init__(self):
 		
 		"""
-		Init
+		Constructor
+		"""
+		
+		self.module = None
+	
+	
+	def init_factory(self, *args, **kwargs):
+		
+		"""
+		Init factory
 		"""
 		
 		self.args = args
@@ -711,110 +721,107 @@ class LayerFactory:
 		Returns name
 		"""
 		
-		return self.args[0]
+		name = self.args[0]
+		return name
 	
 	
 	def create_layer(self, work_tensor, module):
 		
 		"""
-		Create layer
+		Create new layer
 		"""
 		
-		layer_out = None
-		name = self.get_name()
+		return None, work_tensor
+
+	
+	def forward(self, x):
 		
-		if name in LayerFactory_items:
-			factory_callback = LayerFactory_items[name]
-			layer_out, work_tensor = factory_callback.create_layer(
-				self, work_tensor, module
-			)
-			
-		return layer_out, work_tensor
+		return self.module(x)
+	
+	
+class Factory_Conv3d(AbstractLayerFactory):
 
-
-class Factory_Conv3d:
-
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 		
 		"""
 		Returns Conv3d
 		"""
 		
 		in_channels = work_tensor.shape[1]
-		out_channels = factory.args[1]
-		kwargs = factory.kwargs
+		out_channels = self.args[1]
+		kwargs = self.kwargs
 		
-		layer_out = torch.nn.Conv3d(
+		self.module = torch.nn.Conv3d(
 			in_channels=in_channels,
 			out_channels=out_channels,
 			**kwargs
 		)
 		
-		work_tensor = layer_out(work_tensor)
+		work_tensor = self.module(work_tensor)
 		
-		return layer_out, work_tensor
+		return self.module, work_tensor
 
 
-class Factory_Conv2d:
+class Factory_Conv2d(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 	
 		"""
 		Returns Conv2d
 		"""
 		
 		in_channels = work_tensor.shape[1]
-		out_channels = factory.args[1]
-		kwargs = factory.kwargs
+		out_channels = self.args[1]
+		kwargs = self.kwargs
 		
-		layer_out = torch.nn.Conv2d(
+		self.module = torch.nn.Conv2d(
 			in_channels=in_channels,
 			out_channels=out_channels,
 			**kwargs
 		)
 		
-		work_tensor = layer_out(work_tensor)
+		work_tensor = self.module(work_tensor)
 		
-		return layer_out, work_tensor
+		return self.module, work_tensor
 
 
-class Factory_Dropout:
+class Factory_Dropout(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 	
 		"""
 		Returns Dropout
 		"""
 		
-		p = factory.args[1]
-		kwargs = factory.kwargs
+		p = self.args[1]
+		kwargs = self.kwargs
 		
 		layer_out = torch.nn.Dropout(p=p, **kwargs)
 		
 		return layer_out, work_tensor
 
 
-class Factory_MaxPool2d:
+class Factory_MaxPool2d(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 	
 		"""
 		Returns MaxPool2d
 		"""
 		
-		kwargs = factory.kwargs
-		layer_out = torch.nn.MaxPool2d(**kwargs)
+		kwargs = self.kwargs
+		self.module = torch.nn.MaxPool2d(**kwargs)
 		
-		work_tensor = layer_out(work_tensor)
+		work_tensor = self.module(work_tensor)
 		
-		return layer_out, work_tensor
+		return self.module, work_tensor
 
 
-class Factory_Flat:
+class Factory_Flat(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 		
-		args = factory.args
+		args = self.args
 		pos = args[1] if len(args) >= 2 else 1
 		
 		if pos < 0:
@@ -829,44 +836,44 @@ class Factory_Flat:
 		return None, work_tensor
 
 
-class Factory_InsertFirstAxis:
+class Factory_InsertFirstAxis(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 		
 		work_tensor = work_tensor[:,None,:]
 		
 		return None, work_tensor
 
 
-class Factory_Linear:
+class Factory_Linear(AbstractLayerFactory):
 	
-	def create_layer(self, factory:LayerFactory, work_tensor, module):
+	def create_layer(self, work_tensor, module):
 		
 		in_features = work_tensor.shape[1]
-		out_features = factory.args[1]
+		out_features = self.args[1]
 		
-		layer_out = torch.nn.Linear(
+		self.module = torch.nn.Linear(
 			in_features=in_features,
 			out_features=out_features
 		)
 		
-		work_tensor = layer_out(work_tensor)
+		work_tensor = self.module(work_tensor)
 		
-		return layer_out, work_tensor
+		return self.module, work_tensor
 	
 
 
 """
-Register factories
+Register layers factories
 """
 
-register_layer_factory("Conv3d", Factory_Conv3d())
-register_layer_factory("Conv2d", Factory_Conv2d())
-register_layer_factory("Dropout", Factory_Dropout())
-register_layer_factory("MaxPool2d", Factory_MaxPool2d())
-register_layer_factory("Flat", Factory_Flat())
-register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis())
-register_layer_factory("Linear", Factory_Linear())
+register_layer_factory("Conv3d", Factory_Conv3d)
+register_layer_factory("Conv2d", Factory_Conv2d)
+register_layer_factory("Dropout", Factory_Dropout)
+register_layer_factory("MaxPool2d", Factory_MaxPool2d)
+register_layer_factory("Flat", Factory_Flat)
+register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
+register_layer_factory("Linear", Factory_Linear)
 
 
 
@@ -876,7 +883,14 @@ def layer(*args, **kwargs):
 	Define layer
 	"""
 	
-	return LayerFactory(*args, **kwargs)
+	factory = None
+	name = args[0]
+	if name in layers_factories:
+		factory_class = layers_factories[name]
+		factory = factory_class()
+		factory.init_factory(*args, **kwargs)
+		
+	return factory
 
 
 
@@ -891,6 +905,7 @@ class ExtendModule(torch.nn.Module):
 		super(ExtendModule, self).__init__()
 		
 		self._model = model
+		self._layers = []
 		self._layer_shapes = []
 		
 	
@@ -900,14 +915,24 @@ class ExtendModule(torch.nn.Module):
 		Forward model
 		"""
 		
+		for index, obj in enumerate(self._layers):
+			
+			if isinstance(obj, AbstractLayerFactory):
+				
+				layer_factory: AbstractLayerFactory = obj
+				x = layer_factory.forward(x)
+				
+				
 		return x
 	
 	
-	def init_layers(self, layers, debug=False):
+	def init_layers(self, layers=[], debug=False):
 		
 		"""
 		Init layers
 		"""
+		
+		self._layers = layers
 		
 		input_shape = self._model.input_shape
 		output_shape = self._model.output_shape
@@ -921,11 +946,11 @@ class ExtendModule(torch.nn.Module):
 		if debug:
 			print ("Input:" + " " + str( tuple(work_tensor.shape) ))
 		
-		for index, obj in enumerate(layers):
+		for index, obj in enumerate(self._layers):
 			
-			if isinstance(obj, LayerFactory):
+			if isinstance(obj, AbstractLayerFactory):
 				
-				layer_factory: LayerFactory = obj
+				layer_factory: AbstractLayerFactory = obj
 				name = layer_factory.get_name()
 				layer_name = str(index) + "_" + name
 				
