@@ -7,8 +7,11 @@
 
 import torch, os, math, json
 
+from torch.utils.data import Dataset
 
-class FolderDataset():
+
+class FolderDataset(Dataset):
+	
 	
 	def __init__(self):
 		
@@ -16,12 +19,14 @@ class FolderDataset():
 		Init folder dataset
 		"""
 		
+		Dataset.__init__(self)
+		
 		self.chunk_folder_names = (1, 2)
 		self.total_data_count = 0
 		self.folder_path = ""
 	
 	
-	def __getindex__(self, index):
+	def __getitem__(self, index):
 		
 		data = self.read_data(index)
 		
@@ -29,7 +34,7 @@ class FolderDataset():
 	
 	
 	def __len__(self):
-		return len(self.total_data_count)
+		return self.total_data_count
 	
 	
 	def get_folder_path_by_number(self, file_number):
@@ -83,10 +88,10 @@ class FolderDataset():
 		
 	
 	
-	def read_folder(self, folder_path):
+	def read_json(self, folder_path):
 		
 		"""
-		Set folder path
+		Read json file
 		"""
 		
 		self.set_folder(folder_path)

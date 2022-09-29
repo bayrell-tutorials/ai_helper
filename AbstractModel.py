@@ -9,7 +9,7 @@ import os, torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, Dataset
 from torchsummary import summary
 from .Utils import *
 
@@ -33,6 +33,7 @@ class AbstractModel:
 		self.optimizer = None
 		self.loss = None
 		self.verbose = True
+		self.num_workers = os.cpu_count()
 		self.max_epochs = 50
 		self.min_epochs = 10
 		self.max_acc = 0.95
@@ -173,8 +174,9 @@ class AbstractModel:
 		"""
 		
 		if (self.train_dataset is not None and
-			isinstance(self.train_dataset, TensorDataset)):
-				return self.train_dataset.tensors[0].shape[0]
+			isinstance(self.train_dataset, Dataset)):
+				return len(self.train_dataset)
+		
 		return 1
 	
 	
@@ -397,7 +399,7 @@ class AbstractModel:
 		if loss_test < self.min_loss_test and epoch_number >= self.min_epochs:
 			self.stop_training()
 		
-		pass
+		self.save()
 		
 		
 	def stop_training(self):
@@ -429,6 +431,7 @@ class AbstractModel:
 		if self.train_loader is None and self.train_dataset is not None:
 			self.train_loader = DataLoader(
 				self.train_dataset,
+				num_workers=self.num_workers,
 				batch_size=self.batch_size,
 				drop_last=False,
 				shuffle=True
@@ -437,6 +440,7 @@ class AbstractModel:
 		if self.test_loader is None and self.test_dataset is not None:
 			self.test_loader = DataLoader(
 				self.test_dataset,
+				num_workers=self.num_workers,
 				batch_size=self.batch_size,
 				drop_last=False,
 				shuffle=False
@@ -736,7 +740,10 @@ class AbstractLayerFactory:
 	
 	def forward(self, x):
 		
-		return self.module(x)
+		if self.module:
+			return self.module(x)
+			
+		return x
 	
 	
 class Factory_Conv3d(AbstractLayerFactory):
@@ -819,7 +826,8 @@ class Factory_MaxPool2d(AbstractLayerFactory):
 
 class Factory_Flat(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	
+	def forward(self, x):
 		
 		args = self.args
 		pos = args[1] if len(args) >= 2 else 1
@@ -827,20 +835,35 @@ class Factory_Flat(AbstractLayerFactory):
 		if pos < 0:
 			pos = pos - 1
 		
-		shape = list(work_tensor.shape)
+		shape = list(x.shape)
 		shape = shape[:pos]
 		shape.append(-1)
 		
-		work_tensor = work_tensor.reshape( shape )
+		x = x.reshape( shape )
+		
+		return x
+	
+	
+	def create_layer(self, work_tensor, module):
+		
+		work_tensor = self.forward(work_tensor)
 		
 		return None, work_tensor
 
 
 class Factory_InsertFirstAxis(AbstractLayerFactory):
 	
+	
+	def forward(self, x):
+		
+		x = x[:,None,:]
+		
+		return x
+	
+	
 	def create_layer(self, work_tensor, module):
 		
-		work_tensor = work_tensor[:,None,:]
+		work_tensor = self.forward(work_tensor)
 		
 		return None, work_tensor
 
@@ -862,6 +885,15 @@ class Factory_Linear(AbstractLayerFactory):
 		return self.module, work_tensor
 	
 
+class Factory_Softmax(AbstractLayerFactory):
+	
+	def create_layer(self, work_tensor, module):
+		
+		dim = self.kwargs["dim"] if "dim" in self.kwargs else -1
+		self.module = torch.nn.Softmax(dim)
+		
+		return self.module, work_tensor
+
 
 """
 Register layers factories
@@ -874,6 +906,7 @@ register_layer_factory("MaxPool2d", Factory_MaxPool2d)
 register_layer_factory("Flat", Factory_Flat)
 register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
 register_layer_factory("Linear", Factory_Linear)
+register_layer_factory("Softmax", Factory_Softmax)
 
 
 
