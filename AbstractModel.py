@@ -885,6 +885,16 @@ class Factory_Linear(AbstractLayerFactory):
 		work_tensor = self.module(work_tensor)
 		
 		return self.module, work_tensor
+
+
+class Factory_Relu(AbstractLayerFactory):
+	
+	def forward(self, x):
+		x = torch.nn.functional.relu(x)
+		return x
+	
+	def create_layer(self, work_tensor, module):
+		return None, work_tensor
 	
 
 class Factory_Softmax(AbstractLayerFactory):
@@ -908,6 +918,7 @@ register_layer_factory("MaxPool2d", Factory_MaxPool2d)
 register_layer_factory("Flat", Factory_Flat)
 register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
 register_layer_factory("Linear", Factory_Linear)
+register_layer_factory("Relu", Factory_Relu)
 register_layer_factory("Softmax", Factory_Softmax)
 
 
