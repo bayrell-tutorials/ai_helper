@@ -224,7 +224,7 @@ class AbstractModel:
 		summary(self.module)
 		
 		if (isinstance(self.module, ExtendModule)):
-			for arr in self.module._layer_shapes:
+			for arr in self.module._shapes:
 				print ( arr[0] + " => " + str(tuple(arr[1])) )
 	
 	
@@ -621,6 +621,10 @@ class AbstractLayerFactory:
 		"""
 		
 		self.module = None
+		self.parent:ExtendModule = None
+		self.layer_name = ""
+		self.input_shape = None
+		self.output_shape = None
 	
 	
 	def init_factory(self, *args, **kwargs):
@@ -643,32 +647,32 @@ class AbstractLayerFactory:
 		return name
 	
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
 		"""
 		Create new layer
 		"""
 		
-		return None, work_tensor
+		return None, vector_x
 
 	
-	def forward(self, x):
+	def forward(self, vector_x):
 		
 		if self.module:
-			return self.module(x)
+			return self.module(vector_x)
 			
-		return x
+		return vector_x
 	
 	
 class Factory_Conv3d(AbstractLayerFactory):
 
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
 		"""
 		Returns Conv3d
 		"""
 		
-		in_channels = work_tensor.shape[1]
+		in_channels = vector_x.shape[1]
 		out_channels = self.args[1]
 		kwargs = self.kwargs
 		
@@ -678,20 +682,20 @@ class Factory_Conv3d(AbstractLayerFactory):
 			**kwargs
 		)
 		
-		work_tensor = self.module(work_tensor)
+		vector_x = self.module(vector_x)
 		
-		return self.module, work_tensor
+		return self.module, vector_x
 
 
 class Factory_Conv2d(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 	
 		"""
 		Returns Conv2d
 		"""
 		
-		in_channels = work_tensor.shape[1]
+		in_channels = vector_x.shape[1]
 		out_channels = self.args[1]
 		kwargs = self.kwargs
 		
@@ -701,14 +705,14 @@ class Factory_Conv2d(AbstractLayerFactory):
 			**kwargs
 		)
 		
-		work_tensor = self.module(work_tensor)
+		vector_x = self.module(vector_x)
 		
-		return self.module, work_tensor
+		return self.module, vector_x
 
 
 class Factory_Dropout(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 	
 		"""
 		Returns Dropout
@@ -719,12 +723,12 @@ class Factory_Dropout(AbstractLayerFactory):
 		
 		layer_out = torch.nn.Dropout(p=p, **kwargs)
 		
-		return layer_out, work_tensor
+		return layer_out, vector_x
 
 
 class Factory_MaxPool2d(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 	
 		"""
 		Returns MaxPool2d
@@ -733,15 +737,15 @@ class Factory_MaxPool2d(AbstractLayerFactory):
 		kwargs = self.kwargs
 		self.module = torch.nn.MaxPool2d(**kwargs)
 		
-		work_tensor = self.module(work_tensor)
+		vector_x = self.module(vector_x)
 		
-		return self.module, work_tensor
+		return self.module, vector_x
 
 
 class Factory_Flat(AbstractLayerFactory):
 	
 	
-	def forward(self, x):
+	def forward(self, vector_x):
 		
 		args = self.args
 		pos = args[1] if len(args) >= 2 else 1
@@ -749,44 +753,44 @@ class Factory_Flat(AbstractLayerFactory):
 		if pos < 0:
 			pos = pos - 1
 		
-		shape = list(x.shape)
+		shape = list(vector_x.shape)
 		shape = shape[:pos]
 		shape.append(-1)
 		
-		x = x.reshape( shape )
+		vector_x = vector_x.reshape( shape )
 		
-		return x
+		return vector_x
 	
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
-		work_tensor = self.forward(work_tensor)
+		vector_x = self.forward(vector_x)
 		
-		return None, work_tensor
+		return None, vector_x
 
 
 class Factory_InsertFirstAxis(AbstractLayerFactory):
 	
 	
-	def forward(self, x):
+	def forward(self, vector_x):
 		
-		x = x[:,None,:]
+		vector_x = vector_x[:,None,:]
 		
-		return x
+		return vector_x
 	
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
-		work_tensor = self.forward(work_tensor)
+		vector_x = self.forward(vector_x)
 		
-		return None, work_tensor
+		return None, vector_x
 
 
 class Factory_Linear(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
-		in_features = work_tensor.shape[1]
+		in_features = vector_x.shape[1]
 		out_features = self.args[1]
 		
 		self.module = torch.nn.Linear(
@@ -794,29 +798,61 @@ class Factory_Linear(AbstractLayerFactory):
 			out_features=out_features
 		)
 		
-		work_tensor = self.module(work_tensor)
+		vector_x = self.module(vector_x)
 		
-		return self.module, work_tensor
+		return self.module, vector_x
 
 
 class Factory_Relu(AbstractLayerFactory):
 	
-	def forward(self, x):
-		x = torch.nn.functional.relu(x)
-		return x
+	def forward(self, vector_x):
+		vector_x = torch.nn.functional.relu(vector_x)
+		return vector_x
 	
-	def create_layer(self, work_tensor, module):
-		return None, work_tensor
+	def create_layer(self, vector_x):
+		return None, vector_x
 	
 
 class Factory_Softmax(AbstractLayerFactory):
 	
-	def create_layer(self, work_tensor, module):
+	def create_layer(self, vector_x):
 		
 		dim = self.kwargs["dim"] if "dim" in self.kwargs else -1
 		self.module = torch.nn.Softmax(dim)
 		
-		return self.module, work_tensor
+		return self.module, vector_x
+
+
+class Factory_Save(AbstractLayerFactory):
+	
+	def forward(self, vector_x):
+		
+		save_name = self.args[1] if len(self.args) >= 2 else ""
+		
+		if save_name:
+			self.parent._saves[save_name] = vector_x
+		
+		return vector_x
+	
+	def create_layer(self, vector_x):
+		return None, vector_x
+	
+	
+class Factory_Concat(AbstractLayerFactory):
+	
+	def forward(self, vector_x):
+		
+		save_name = self.args[1] if len(self.args) >= 2 else ""
+		dim = self.kwargs["dim"] if "dim" in self.kwargs else 1
+		
+		if save_name and save_name in self.parent._saves:
+			save_x = self.parent._saves[save_name]
+			vector_x = torch.cat([vector_x, save_x], dim=dim)
+		
+		return vector_x
+	
+	def create_layer(self, vector_x):
+		return None, vector_x
 
 
 """
@@ -832,6 +868,8 @@ register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
 register_layer_factory("Linear", Factory_Linear)
 register_layer_factory("Relu", Factory_Relu)
 register_layer_factory("Softmax", Factory_Softmax)
+register_layer_factory("Save", Factory_Save)
+register_layer_factory("Concat", Factory_Concat)
 
 
 
@@ -864,7 +902,8 @@ class ExtendModule(torch.nn.Module):
 		
 		self._model = model
 		self._layers = []
-		self._layer_shapes = []
+		self._shapes = []
+		self._saves = {}
 		
 	
 	def forward(self, x):
@@ -898,26 +937,35 @@ class ExtendModule(torch.nn.Module):
 		arr = list(input_shape)
 		arr.insert(0, 1)
 		
-		work_tensor = torch.zeros( tuple(arr) )
-		self._layer_shapes.append( ("Input", work_tensor.shape) )
+		vector_x = torch.zeros( tuple(arr) )
+		self._shapes.append( ("Input", vector_x.shape) )
 		
 		if debug:
-			print ("Input:" + " " + str( tuple(work_tensor.shape) ))
+			print ("Input:" + " " + str( tuple(vector_x.shape) ))
 		
-		for index, obj in enumerate(self._layers):
+		index = 1
+		
+		for obj in self._layers:
 			
 			if isinstance(obj, AbstractLayerFactory):
 				
 				layer_factory: AbstractLayerFactory = obj
+				layer_factory.parent = self
+				
 				name = layer_factory.get_name()
-				layer_name = str(len(self._layer_shapes)) + "_" + name
+				layer_name = str( index ) + "_" + name
+				layer_factory.layer_name = layer_name
+				layer_factory.input_shape = vector_x.shape
 				
-				layer, work_tensor = layer_factory.create_layer(work_tensor, self)
+				layer, vector_x = layer_factory.create_layer(vector_x)
+				layer_factory.output_shape = vector_x.shape
 				
-				self._layer_shapes.append( (layer_name, work_tensor.shape) )
+				self._shapes.append( (layer_name, vector_x.shape) )
 				
 				if debug:
-					print (layer_name + " => " + str(tuple(work_tensor.shape)))
+					print (layer_name + " => " + str(tuple(vector_x.shape)))
 				
 				if layer:
 					self.add_module(layer_name, layer)
+					
+				index = index + 1
