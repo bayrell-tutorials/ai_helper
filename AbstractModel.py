@@ -221,7 +221,9 @@ class AbstractModel:
 		Show model summary
 		"""
 		
-		summary(self.module)
+		tensor_device = self.get_tensor_device()
+		module = self.module.to(tensor_device)
+		summary(self.module, self.input_shape, device=str(tensor_device))
 		
 		if (isinstance(self.module, ExtendModule)):
 			for arr in self.module._shapes:
@@ -438,9 +440,9 @@ class AbstractModel:
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
-					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
+					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					
 					train_status.on_start_batch_train(batch_x, batch_y)
 					
@@ -480,9 +482,9 @@ class AbstractModel:
 				# Test batch
 				for batch_x, batch_y in self.test_loader:
 					
-					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
+					batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
 					
 					train_status.on_start_batch_test(batch_x, batch_y)
 					
@@ -570,10 +572,9 @@ class AbstractModel:
 		if tensor_device is None:
 			tensor_device = self.get_tensor_device()
 		
-		vector_x, _ = self.convert_batch(x=vector_x)
-		
 		vector_x = vector_x.to(tensor_device)
 		module = self.module.to(tensor_device)
+		vector_x, _ = self.convert_batch(x=vector_x)
 		
 		vector_y = module(vector_x)
 		
