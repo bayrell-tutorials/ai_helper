@@ -5,155 +5,196 @@
 # License: MIT
 ##
 
-import torch, os, math, json
-
-from torch.utils.data import Dataset
+import io, os, random, math, sqlite3, json
 
 
-class FolderDataset(Dataset):
-	
+class FolderDataset:
 	
 	def __init__(self):
 		
-		"""
-		Init folder dataset
-		"""
+		self.db_path = ""
+		self.db_con = ""
+		self.answers = {}
 		
-		Dataset.__init__(self)
-		
-		self.chunk_folder_names = (1, 2)
-		self.total_data_count = 0
-		self.folder_path = ""
 	
-	
-	def __getitem__(self, index):
-		
-		data = self.read_data(index)
-		
-		return ( data[0], data[1] )
-	
-	
-	def __len__(self):
-		return self.total_data_count
-	
-	
-	def get_folder_path_by_number(self, file_number):
+	def create_db(self):
 		
 		"""
-		Get forlder path by number
+		Create database
 		"""
 		
-		chunk_arr = []
-		last = file_number
+		cur = self.db_con.cursor()
 		
-		for value in self.chunk_folder_names:
+		sql = """CREATE TABLE dataset(
+			id integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+			db integer NOT NULL,
+			type text NOT NULL,
+			file_name text NOT NULL,
+			file_index text NOT NULL,
+			answer text NOT NULL,
+			predict text NOT NULL,
+			width integer NOT NULL,
+			height integer NOT NULL,
+			info text NOT NULL
+		)"""
+		cur.execute(sql)
+		
+		sql = """CREATE TABLE answers(
+			id integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+			db integer NOT NULL,
+			answer text NOT NULL
+		)"""
+		cur.execute(sql)
+		cur.close()
+	
+	
+	def create(self, path):
+		
+		"""
+		Create dataset
+		"""
+		
+		if os.path.exists(path):
+			os.unlink(path)
+		
+		if os.path.exists(path + "-shm"):
+			os.unlink(path + "-shm")
+		
+		if os.path.exists(path + "-wal"):
+			os.unlink(path + "-wal")
+		
+		self.open(path)
+		self.create_db()
+	
+	
+	def open(self, path):
+		
+		"""
+		Open dataset
+		"""
+		
+		self.db_path = path
+		self.db_con = sqlite3.connect(path)
+		self.db_con.row_factory = sqlite3.Row
+		
+		cur = self.db_con.cursor()
+		res = cur.execute("PRAGMA journal_mode = WAL;")
+		cur.close()
+		
+	
+	
+	def getAnswer(self, answer="", db=0):
+		
+		"""
+		Find answer
+		"""
+		
+		sql = """
+			select * from "answers"
+			where db=:db and answer=:answer
+		"""
+		
+		cur = self.db_con.cursor()
+		res = cur.execute(sql, {"answer": answer, "db": db})
+		record = res.fetchone();
+		cur.close()
+		
+		return record
+	
+	
+	
+	def addAnswer(self, answer="", db=0):
+		
+		"""
+		Add answer
+		"""
+		
+		if (db in self.answers) and (answer in self.answers[db]):
+			return
+		
+		record = self.getAnswer(answer)
+		if record is not None:
+			return
 			
-			name = last % pow(10, value)
-			name = str(name).zfill(value)
-			chunk_arr.append(name)
+		sql = """
+			INSERT INTO 'answers'
+			('db', 'answer')
+			VALUES
+			(:db, :answer)
+		"""
+		
+		cur = self.db_con.cursor()
+		res = cur.execute(sql, {
+			"db": db,
+			"answer": answer,
+		})
+		cur.close()
+		
+		if not (db in self.answers):
+			self.answers[db] = []
+		
+		self.answers[db].append(answer)
+		
+	
+	def getRecord(self, file_name="", db=0):
+		
+		"""
+		Find record
+		"""
+		
+		sql = """
+			select * from dataset
+			where db=:db and file_name=:file_name
+		"""
+		
+		cur = self.db_con.cursor()
+		res = cur.execute(sql, {"file_name": file_name, "db": db})
+		record = res.fetchone();
+		cur.close()
+		
+		return record
+	
+	
+	def addRecord(self, type="", file_name="", file_index="",
+		answer="", width=0, height=0, db=0, info={}):
+		
+		"""
+		Add record
+		"""
+		
+		record = self.getRecord(file_name)
+		if record is None:
 			
-			last = math.floor(last / pow(10, value))
+			sql = """
+				INSERT INTO 'dataset'
+				('db', 'type', 'file_name', 'file_index',
+				'answer', 'predict', 'width', 'height', 'info')
+				VALUES
+				(:db, :type, :file_name, :file_index, :answer, :predict, :width, :height, :info)
+			"""
 			
-		return os.path.join(*chunk_arr)
-		
-	
-	def set_folder(self, folder_path):
-		
-		"""
-		Set folder path
-		"""
-		
-		self.folder_path = folder_path
-		self.total_data_count = 0
-	
-	
-	def write_json(self):
-		
-		"""
-		Write json
-		"""
-		
-		if not os.path.isdir(self.folder_path):
-			os.makedirs(self.folder_path)
-		
-		json_file_path = os.path.join(self.folder_path, "dataset.json")
-		
-		obj = {
-			"total_data_count": self.total_data_count,
-		}
-		
-		json_object = json.dumps(obj, indent=4)
-		with open(json_file_path, "w") as file:
-			file.write(json_object)
-		
-	
-	
-	def read_json(self, folder_path):
-		
-		"""
-		Read json file
-		"""
-		
-		self.set_folder(folder_path)
-		
-		json_file_path = os.path.join(self.folder_path, "dataset.json")
-		
-		if os.path.isfile(json_file_path):
-			with open(json_file_path) as f:
-				obj = json.load(f)
-				self.total_data_count = obj["total_data_count"]
-	
-	
-	def save_data(self, *data):
-		
-		"""
-		Save data
-		"""
-		
-		folder_path = os.path.join(
-			self.folder_path,
-			self.get_folder_path_by_number(self.total_data_count)
-		);
-		file_path = os.path.join(folder_path, str(self.total_data_count) + ".data");
-		
-		if not os.path.isdir(folder_path):
-			os.makedirs(folder_path)
-		
-		torch.save(data, file_path)
-		self.total_data_count = self.total_data_count + 1
-		
-		
-	def read_data(self, file_number):
-		
-		"""
-		Read data by number
-		"""
-		
-		res = None
-		
-		file_path = os.path.join(
-			self.folder_path,
-			self.get_folder_path_by_number(file_number),
-			str(file_number) + ".data"
-		);
-		
-		try:
-			res = torch.load(file_path)
-		except Exception:
-			res = None
+			cur = self.db_con.cursor()
+			res = cur.execute(sql, {
+				"db": db,
+				"type": type,
+				"file_name": file_name,
+				"file_index": file_index,
+				"answer": answer,
+				"predict": "",
+				"width": width,
+				"height": height,
+				"db": db,
+				"info": json.dumps(info),
+			})
+			cur.close()
 			
-		return res
-
-
-	def clear(self):
+			pass
 		
-		"""
-		Clear folder
-		"""
+		pass
+	
+	
+	
+	def flush(self):
 		
-		self.total_data_count = 0
+		self.db_con.commit()
 		
-		if self.folder_path != "":
-			if os.path.isdir(self.folder_path):
-				import shutil
-				shutil.rmtree(self.folder_path)
