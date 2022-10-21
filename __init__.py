@@ -6,7 +6,8 @@
 ##
 
 from .AbstractModel import AbstractModel, ExtendModule, AbstractLayerFactory, \
-	layer, register_layer_factory, do_train
+	layer, register_layer_factory, do_train, \
+	TransformToIntImage, TransformMoveRGBAxisToEnd
 from .ChunkLoader import ChunkLoader
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
@@ -30,6 +31,8 @@ __all__ = (
 	"FolderDataset",
 	"TrainStatus",
 	"TrainVerboseCallback",
+	"TransformToIntImage",
+	"TransformMoveRGBAxisToEnd",
 	
 	"layer", "register_layer_factory", "do_train",
 	"sign", "index_of", "indexOf", "append_numpy_vector", "init_tensorflow_gpu",

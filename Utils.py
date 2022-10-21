@@ -165,15 +165,15 @@ def image_to_tensor(image_bytes, mode=None):
 	return tensor
 	
 
-def show_image_in_plot(image, cmap=None):
+def show_image_in_plot(image, cmap=None, first_channel=False):
 	
 	"""
 	Plot show image
 	"""
 	
 	if torch.is_tensor(image):
-		#image = image * 255.0
-		image = image.type(torch.int64)
+		if first_channel == True:
+			image = torch.moveaxis(image, 0, 2)
 	
 	plt.imshow(image, cmap)
 	plt.show()

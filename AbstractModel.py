@@ -744,7 +744,6 @@ class Factory_MaxPool2d(AbstractLayerFactory):
 
 class Factory_Flat(AbstractLayerFactory):
 	
-	
 	def forward(self, vector_x):
 		
 		args = self.args
@@ -771,10 +770,25 @@ class Factory_Flat(AbstractLayerFactory):
 
 class Factory_InsertFirstAxis(AbstractLayerFactory):
 	
-	
 	def forward(self, vector_x):
 		
 		vector_x = vector_x[:,None,:]
+		
+		return vector_x
+	
+	
+	def create_layer(self, vector_x):
+		
+		vector_x = self.forward(vector_x)
+		
+		return None, vector_x
+
+
+class Factory_MoveRGBAxisToEnd(AbstractLayerFactory):
+	
+	def forward(self, vector_x):
+		
+		vector_x = torch.moveaxis(vector_x, 0, 2)
 		
 		return vector_x
 	
@@ -865,6 +879,7 @@ register_layer_factory("Dropout", Factory_Dropout)
 register_layer_factory("MaxPool2d", Factory_MaxPool2d)
 register_layer_factory("Flat", Factory_Flat)
 register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
+register_layer_factory("MoveRGBAxisToEnd", Factory_MoveRGBAxisToEnd)
 register_layer_factory("Linear", Factory_Linear)
 register_layer_factory("Relu", Factory_Relu)
 register_layer_factory("Softmax", Factory_Softmax)
@@ -969,3 +984,20 @@ class ExtendModule(torch.nn.Module):
 					self.add_module(layer_name, layer)
 					
 				index = index + 1
+
+
+
+class TransformMoveRGBAxisToEnd:
+		
+	def __call__(self, t):
+		t = torch.moveaxis(t, 0, 2)
+		return t
+		
+
+class TransformToIntImage:
+	
+	def __call__(self, t):
+		t = t * 255
+		t = t.to(torch.uint8)
+		
+		return t
