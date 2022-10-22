@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from torchsummary import summary
 from .Utils import *
+from .ModelDatabase import *
 
 
 class AbstractModel:
@@ -42,6 +43,8 @@ class AbstractModel:
 		self.onnx_path = "web"
 		self.onnx_opset_version = 9
 		self.model_name = ""
+		self.model_database = ModelDatabase()
+		self.model_database.set_path( os.path.join(os.getcwd(), "data", "model") )
 		
 		self._is_debug = False
 		self._is_trained = False
@@ -211,8 +214,7 @@ class AbstractModel:
 		self.model_name = model_name
 		self.module = ExtendModule(self)
 		self.module.init_layers(layers, debug=debug)
-		
-		pass
+		self._is_trained = False
 	
 	
 	def summary(self):
@@ -236,16 +238,7 @@ class AbstractModel:
 		Save model to file
 		"""
 		
-		if file_name is None:
-			file_name = self.get_model_path()
-		
-		if self.module:
-			
-			dir_name = os.path.dirname(file_name)
-			if not os.path.isdir(dir_name):
-				os.makedirs(dir_name)
-			
-			torch.save(self.module.state_dict(), file_name)
+		self.model_database.save(self.model_name, self.module, self.train_status)
 	
 	
 	def save_onnx(self, tensor_device=None):
@@ -280,24 +273,16 @@ class AbstractModel:
 		)
 	
 	
-	def load(self, file_name=None):
+	def load(self):
 		
 		"""
 		Load model from file
 		"""
 		
-		if file_name is None:
-			file_name = self.get_model_path()
+		is_loaded = self.model_database.load(self.model_name, self.module, self.train_status)
+		if is_loaded:
+			self._is_trained = self.check_is_trained()
 		
-		self._is_trained = False
-		
-		try:
-			if os.path.isfile(file_name) and self.module:
-				self.module.load_state_dict(torch.load(file_name))
-				self._is_trained = True
-		
-		except:
-			pass
 		
 		
 	def check_answer(self, **kwargs):
@@ -345,12 +330,12 @@ class AbstractModel:
 				res = res + 1
 		
 		return res
-		
-		
-	def on_end_epoch(self, **kwargs):
+	
+	
+	def check_is_trained(self):
 		
 		"""
-		On epoch end
+		Returns True if model is trained
 		"""
 		
 		epoch_number = self.train_status.epoch_number
@@ -359,19 +344,33 @@ class AbstractModel:
 		acc_rel = self.train_status.get_acc_rel()
 		loss_test = self.train_status.get_loss_test()
 		
-		if epoch_number >= self.max_epochs:
-			self.stop_training()
+		if epoch_number >= 50:
+			return True
 		
-		if acc_train > self.max_acc and epoch_number >= self.min_epochs:
-			self.stop_training()
+		if acc_train > 0.95 and epoch_number >= 10:
+			return True
 		
-		if acc_test > self.max_acc and epoch_number >= self.min_epochs:
-			self.stop_training()
+		if acc_test > 0.95  and epoch_number >= 10:
+			return True
 		
-		if acc_rel > self.max_acc_rel and acc_train > 0.8:
-			self.stop_training()
+		if acc_rel > 1.5 and acc_train > 0.8:
+			return True
 		
-		if loss_test < self.min_loss_test and epoch_number >= self.min_epochs:
+		if loss_test < 0.001 and epoch_number >= 10:
+			return True
+		
+		return False
+	
+		
+	def on_end_epoch(self, **kwargs):
+		
+		"""
+		On epoch end
+		"""
+		
+		self._is_trained = self.check_is_trained()
+		
+		if self._is_trained:
 			self.stop_training()
 		
 		self.save()
@@ -426,7 +425,7 @@ class AbstractModel:
 		# Do train
 		train_status = self.train_status
 		train_status.epoch_number = 1
-		train_status.do_training = 1
+		train_status.do_training = True
 		train_status.train_data_count = self.get_train_data_count()
 		train_status.on_start_train()
 		
@@ -542,12 +541,10 @@ class AbstractModel:
 		Show train history
 		"""
 		
-		file_name, _ = os.path.splitext( self.get_model_path() )
+		file_name, _ = os.path.splitext( self.model_database.get_model_path(self.model_name) )
 		history_image = file_name + ".png"
 		
-		dir_name = os.path.dirname(history_image)
-		if not os.path.isdir(dir_name):
-			os.makedirs(dir_name)
+		make_parent_dir(history_image)
 		
 		fig, axs = plt.subplots(2)
 		axs[0].plot( np.multiply(self.train_status.history['loss_train'], 100), label='train loss')
@@ -595,8 +592,9 @@ def do_train(model:AbstractModel, summary=False):
 	model.load_dataset(type="train")
 	
 	# Train the model
-	model.train()
-	model.show_train_history()
+	if model.is_trained():
+		model.train()
+		model.show_train_history()
 		
 
 
@@ -624,8 +622,7 @@ class AbstractLayerFactory:
 		Returns name
 		"""
 		
-		name = self.args[0]
-		return name
+		return ""
 	
 	
 	def create_layer(self, vector_x):
@@ -650,9 +647,13 @@ class Conv3d(AbstractLayerFactory):
 	
 	def __init__(self, out_channels, *args, **kwargs):
 		
-		AbstractLayerFactory.__init__(self)
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
 		self.out_channels = out_channels
-		
+	
+	
+	def get_name(self):
+		return "Conv3d"
+	
 	
 	def create_layer(self, vector_x):
 		
@@ -680,8 +681,12 @@ class Conv2d(AbstractLayerFactory):
 	
 	def __init__(self, out_channels, *args, **kwargs):
 		
-		AbstractLayerFactory.__init__(self)
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
 		self.out_channels = out_channels
+	
+	
+	def get_name(self):
+		return "Conv2d"
 	
 	
 	def create_layer(self, vector_x):
@@ -710,8 +715,12 @@ class Dropout(AbstractLayerFactory):
 	
 	def __init__(self, p, *args, **kwargs):
 		
-		AbstractLayerFactory.__init__(self)
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
 		self.p = p
+	
+	
+	def get_name(self):
+		return "Dropout"
 	
 	
 	def create_layer(self, vector_x):
@@ -727,6 +736,11 @@ class Dropout(AbstractLayerFactory):
 
 
 class MaxPool2d(AbstractLayerFactory):
+	
+	
+	def get_name(self):
+		return "MaxPool2d"
+	
 	
 	def create_layer(self, vector_x):
 	
@@ -746,8 +760,12 @@ class Flat(AbstractLayerFactory):
 	
 	def __init__(self, pos=1, *args, **kwargs):
 		
-		AbstractLayerFactory.__init__(self)
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
 		self.pos = pos
+	
+	
+	def get_name(self):
+		return "Flat"
 	
 	
 	def forward(self, vector_x):
@@ -780,6 +798,10 @@ class InsertFirstAxis(AbstractLayerFactory):
 	Insert first Axis for convolution layer
 	"""
 	
+	def get_name(self):
+		return "InsertFirstAxis"
+	
+	
 	def forward(self, vector_x):
 		
 		vector_x = vector_x[:,None,:]
@@ -800,9 +822,13 @@ class MoveRGBToEnd(AbstractLayerFactory):
 	Move RGB channel to end
 	"""
 	
+	def get_name(self):
+		return "MoveRGBToEnd"
+	
+	
 	def forward(self, vector_x):
 		
-		vector_x = torch.moveaxis(vector_x, 0, 2)
+		vector_x = torch.moveaxis(vector_x, 1, 3)
 		
 		return vector_x
 	
@@ -816,10 +842,20 @@ class MoveRGBToEnd(AbstractLayerFactory):
 
 class Linear(AbstractLayerFactory):
 	
+	def __init__(self, out_features, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
+		self.out_features = out_features
+	
+	
+	def get_name(self):
+		return "Linear"
+	
+	
 	def create_layer(self, vector_x):
 		
 		in_features = vector_x.shape[1]
-		out_features = self.args[1]
+		out_features = self.out_features
 		
 		self.module = torch.nn.Linear(
 			in_features=in_features,
@@ -833,6 +869,9 @@ class Linear(AbstractLayerFactory):
 
 class Relu(AbstractLayerFactory):
 	
+	def get_name(self):
+		return "Relu"
+	
 	def forward(self, vector_x):
 		vector_x = torch.nn.functional.relu(vector_x)
 		return vector_x
@@ -843,6 +882,9 @@ class Relu(AbstractLayerFactory):
 
 class Softmax(AbstractLayerFactory):
 	
+	def get_name(self):
+		return "Softmax"
+	
 	def create_layer(self, vector_x):
 		
 		dim = self.kwargs["dim"] if "dim" in self.kwargs else -1
@@ -852,6 +894,9 @@ class Softmax(AbstractLayerFactory):
 
 
 class Model_Save(AbstractLayerFactory):
+	
+	def get_name(self):
+		return "Save"
 	
 	def forward(self, vector_x):
 		
@@ -868,6 +913,9 @@ class Model_Save(AbstractLayerFactory):
 	
 class Model_Concat(AbstractLayerFactory):
 	
+	def get_name(self):
+		return "Concat"
+	
 	def forward(self, vector_x):
 		
 		save_name = self.args[1] if len(self.args) >= 2 else ""
@@ -883,6 +931,20 @@ class Model_Concat(AbstractLayerFactory):
 		return None, vector_x
 
 
+class Layer(AbstractLayerFactory):
+	
+	def __init__(self, name, layer, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self, *args, **kwargs)
+		self.name = name
+		self.layer = layer
+	
+	def get_name(self):
+		return self.name
+	
+	def create_layer(self, vector_x):
+		return self.layer, vector_x
+	
 
 class ExtendModule(torch.nn.Module):
 	

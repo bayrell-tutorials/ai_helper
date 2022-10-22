@@ -8,10 +8,10 @@
 from .AbstractModel import AbstractModel, ExtendModule, AbstractLayerFactory, \
 	TransformToIntImage, TransformMoveRGBToEnd, do_train, \
 	Conv3d, Conv2d, Dropout, MaxPool2d, Flat, InsertFirstAxis, MoveRGBToEnd, \
-	Linear, Relu, Softmax, Model_Save, Model_Concat
+	Linear, Relu, Softmax, Model_Save, Model_Concat, Layer
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
-from .FolderDataset import FolderDatabase, FolderDataset, \
+from .FolderDatabase import FolderDatabase, FolderDataset, \
 	init_folder_database, convert_folder_database
 from .TrainStatus import TrainStatus
 from .TrainVerboseCallback import TrainVerboseCallback
@@ -36,7 +36,7 @@ __all__ = (
 	"TransformMoveRGBToEnd",
 	
 	"Conv3d", "Conv2d", "Dropout", "MaxPool2d", "Flat",
-	"InsertFirstAxis", "MoveRGBToEnd",
+	"InsertFirstAxis", "MoveRGBToEnd", "Layer",
 	"Linear", "Relu", "Softmax", "Model_Save", "Model_Concat",
 	
 	"init_folder_database", "convert_folder_database", "do_train",
