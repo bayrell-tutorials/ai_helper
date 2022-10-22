@@ -8,10 +8,10 @@
 from .AbstractModel import AbstractModel, ExtendModule, AbstractLayerFactory, \
 	layer, register_layer_factory, do_train, \
 	TransformToIntImage, TransformMoveRGBAxisToEnd
-from .ChunkLoader import ChunkLoader
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
-from .FolderDataset import FolderDataset
+from .FolderDataset import FolderDatabase, FolderDataset, \
+	init_folder_database, convert_folder_database
 from .TrainStatus import TrainStatus
 from .TrainVerboseCallback import TrainVerboseCallback
 from .Utils import sign, index_of, indexOf, append_numpy_vector, init_tensorflow_gpu, \
@@ -25,15 +25,16 @@ __all__ = (
 	"AbstractModel",
 	"AbstractLayerFactory",
 	"ExtendModule",
-	"ChunkLoader",
 	"Directory",
 	"DirectoryZip",
+	"FolderDatabase",
 	"FolderDataset",
 	"TrainStatus",
 	"TrainVerboseCallback",
 	"TransformToIntImage",
 	"TransformMoveRGBAxisToEnd",
 	
+	"init_folder_database", "convert_folder_database",
 	"layer", "register_layer_factory", "do_train",
 	"sign", "index_of", "indexOf", "append_numpy_vector", "init_tensorflow_gpu",
 	"resize_image_canvas", "image_to_tensor", "show_image_in_plot", "append_tensor_data",
