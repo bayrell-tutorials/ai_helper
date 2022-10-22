@@ -6,8 +6,9 @@
 ##
 
 from .AbstractModel import AbstractModel, ExtendModule, AbstractLayerFactory, \
-	layer, register_layer_factory, do_train, \
-	TransformToIntImage, TransformMoveRGBAxisToEnd
+	TransformToIntImage, TransformMoveRGBToEnd, do_train, \
+	Conv3d, Conv2d, Dropout, MaxPool2d, Flat, InsertFirstAxis, MoveRGBToEnd, \
+	Linear, Relu, Softmax, Model_Save, Model_Concat
 from .Directory import Directory
 from .DirectoryZip import DirectoryZip
 from .FolderDataset import FolderDatabase, FolderDataset, \
@@ -32,10 +33,13 @@ __all__ = (
 	"TrainStatus",
 	"TrainVerboseCallback",
 	"TransformToIntImage",
-	"TransformMoveRGBAxisToEnd",
+	"TransformMoveRGBToEnd",
 	
-	"init_folder_database", "convert_folder_database",
-	"layer", "register_layer_factory", "do_train",
+	"Conv3d", "Conv2d", "Dropout", "MaxPool2d", "Flat",
+	"InsertFirstAxis", "MoveRGBToEnd",
+	"Linear", "Relu", "Softmax", "Model_Save", "Model_Concat",
+	
+	"init_folder_database", "convert_folder_database", "do_train",
 	"sign", "index_of", "indexOf", "append_numpy_vector", "init_tensorflow_gpu",
 	"resize_image_canvas", "image_to_tensor", "show_image_in_plot", "append_tensor_data",
 	"get_vector_from_answer", "get_answer_from_vector", "alphanum_sort", "append_tensor",

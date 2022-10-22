@@ -355,3 +355,16 @@ def alphanum_sort(files):
 	"""
 	
 	files.sort(key=get_sort_alphanum_key)
+
+
+def make_parent_dir(file_path):
+	
+	"""
+	Make parent dir
+	"""
+	
+	folder_path = os.path.dirname(file_path)
+	
+	if not os.path.isdir(folder_path):
+		os.makedirs(folder_path)
+	

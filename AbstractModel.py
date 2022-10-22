@@ -600,22 +600,10 @@ def do_train(model:AbstractModel, summary=False):
 		
 
 
-layers_factories = {}
-
-
-def register_layer_factory(key, value):
-	
-	"""
-	Regisyer layer factory
-	"""
-	
-	layers_factories[key] = value
-
-
 class AbstractLayerFactory:
 	
 	
-	def __init__(self):
+	def __init__(self, *args, **kwargs):
 		
 		"""
 		Constructor
@@ -626,14 +614,6 @@ class AbstractLayerFactory:
 		self.layer_name = ""
 		self.input_shape = None
 		self.output_shape = None
-	
-	
-	def init_factory(self, *args, **kwargs):
-		
-		"""
-		Init factory
-		"""
-		
 		self.args = args
 		self.kwargs = kwargs
 	
@@ -665,8 +645,15 @@ class AbstractLayerFactory:
 		return vector_x
 	
 	
-class Factory_Conv3d(AbstractLayerFactory):
-
+class Conv3d(AbstractLayerFactory):
+	
+	
+	def __init__(self, out_channels, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self)
+		self.out_channels = out_channels
+		
+	
 	def create_layer(self, vector_x):
 		
 		"""
@@ -674,7 +661,7 @@ class Factory_Conv3d(AbstractLayerFactory):
 		"""
 		
 		in_channels = vector_x.shape[1]
-		out_channels = self.args[1]
+		out_channels = self.out_channels
 		kwargs = self.kwargs
 		
 		self.module = torch.nn.Conv3d(
@@ -688,7 +675,14 @@ class Factory_Conv3d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Factory_Conv2d(AbstractLayerFactory):
+class Conv2d(AbstractLayerFactory):
+	
+	
+	def __init__(self, out_channels, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self)
+		self.out_channels = out_channels
+	
 	
 	def create_layer(self, vector_x):
 	
@@ -697,7 +691,7 @@ class Factory_Conv2d(AbstractLayerFactory):
 		"""
 		
 		in_channels = vector_x.shape[1]
-		out_channels = self.args[1]
+		out_channels = self.out_channels
 		kwargs = self.kwargs
 		
 		self.module = torch.nn.Conv2d(
@@ -711,7 +705,14 @@ class Factory_Conv2d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Factory_Dropout(AbstractLayerFactory):
+class Dropout(AbstractLayerFactory):
+	
+	
+	def __init__(self, p, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self)
+		self.p = p
+	
 	
 	def create_layer(self, vector_x):
 	
@@ -719,15 +720,13 @@ class Factory_Dropout(AbstractLayerFactory):
 		Returns Dropout
 		"""
 		
-		p = self.args[1]
 		kwargs = self.kwargs
-		
-		layer_out = torch.nn.Dropout(p=p, **kwargs)
+		layer_out = torch.nn.Dropout(p=self.p, **kwargs)
 		
 		return layer_out, vector_x
 
 
-class Factory_MaxPool2d(AbstractLayerFactory):
+class MaxPool2d(AbstractLayerFactory):
 	
 	def create_layer(self, vector_x):
 	
@@ -743,12 +742,18 @@ class Factory_MaxPool2d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Factory_Flat(AbstractLayerFactory):
+class Flat(AbstractLayerFactory):
+	
+	def __init__(self, pos=1, *args, **kwargs):
+		
+		AbstractLayerFactory.__init__(self)
+		self.pos = pos
+	
 	
 	def forward(self, vector_x):
 		
 		args = self.args
-		pos = args[1] if len(args) >= 2 else 1
+		pos = self.pos
 		
 		if pos < 0:
 			pos = pos - 1
@@ -769,7 +774,11 @@ class Factory_Flat(AbstractLayerFactory):
 		return None, vector_x
 
 
-class Factory_InsertFirstAxis(AbstractLayerFactory):
+class InsertFirstAxis(AbstractLayerFactory):
+	
+	"""
+	Insert first Axis for convolution layer
+	"""
 	
 	def forward(self, vector_x):
 		
@@ -785,7 +794,11 @@ class Factory_InsertFirstAxis(AbstractLayerFactory):
 		return None, vector_x
 
 
-class Factory_MoveRGBAxisToEnd(AbstractLayerFactory):
+class MoveRGBToEnd(AbstractLayerFactory):
+	
+	"""
+	Move RGB channel to end
+	"""
 	
 	def forward(self, vector_x):
 		
@@ -801,7 +814,7 @@ class Factory_MoveRGBAxisToEnd(AbstractLayerFactory):
 		return None, vector_x
 
 
-class Factory_Linear(AbstractLayerFactory):
+class Linear(AbstractLayerFactory):
 	
 	def create_layer(self, vector_x):
 		
@@ -818,7 +831,7 @@ class Factory_Linear(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Factory_Relu(AbstractLayerFactory):
+class Relu(AbstractLayerFactory):
 	
 	def forward(self, vector_x):
 		vector_x = torch.nn.functional.relu(vector_x)
@@ -828,7 +841,7 @@ class Factory_Relu(AbstractLayerFactory):
 		return None, vector_x
 	
 
-class Factory_Softmax(AbstractLayerFactory):
+class Softmax(AbstractLayerFactory):
 	
 	def create_layer(self, vector_x):
 		
@@ -838,7 +851,7 @@ class Factory_Softmax(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Factory_Save(AbstractLayerFactory):
+class Model_Save(AbstractLayerFactory):
 	
 	def forward(self, vector_x):
 		
@@ -853,7 +866,7 @@ class Factory_Save(AbstractLayerFactory):
 		return None, vector_x
 	
 	
-class Factory_Concat(AbstractLayerFactory):
+class Model_Concat(AbstractLayerFactory):
 	
 	def forward(self, vector_x):
 		
@@ -868,41 +881,6 @@ class Factory_Concat(AbstractLayerFactory):
 	
 	def create_layer(self, vector_x):
 		return None, vector_x
-
-
-"""
-Register layers factories
-"""
-
-register_layer_factory("Conv3d", Factory_Conv3d)
-register_layer_factory("Conv2d", Factory_Conv2d)
-register_layer_factory("Dropout", Factory_Dropout)
-register_layer_factory("MaxPool2d", Factory_MaxPool2d)
-register_layer_factory("Flat", Factory_Flat)
-register_layer_factory("InsertFirstAxis", Factory_InsertFirstAxis)
-register_layer_factory("MoveRGBAxisToEnd", Factory_MoveRGBAxisToEnd)
-register_layer_factory("Linear", Factory_Linear)
-register_layer_factory("Relu", Factory_Relu)
-register_layer_factory("Softmax", Factory_Softmax)
-register_layer_factory("Save", Factory_Save)
-register_layer_factory("Concat", Factory_Concat)
-
-
-
-def layer(*args, **kwargs):
-	
-	"""
-	Define layer
-	"""
-	
-	factory = None
-	name = args[0]
-	if name in layers_factories:
-		factory_class = layers_factories[name]
-		factory = factory_class()
-		factory.init_factory(*args, **kwargs)
-		
-	return factory
 
 
 
@@ -988,7 +966,7 @@ class ExtendModule(torch.nn.Module):
 
 
 
-class TransformMoveRGBAxisToEnd:
+class TransformMoveRGBToEnd:
 		
 	def __call__(self, t):
 		t = torch.moveaxis(t, 0, 2)
