@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import os, torch
+import os, time, torch
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -23,6 +23,7 @@ class AbstractModel:
 		from .TrainStatus import TrainStatus
 		self.train_status = TrainStatus()
 		self.train_status.model = self
+		self.train_status.epoch_number = 0
 		self.train_loader = None
 		self.test_loader = None
 		self.train_dataset = None
@@ -32,8 +33,8 @@ class AbstractModel:
 		self.optimizer = None
 		self.loss = None
 		self.verbose = True
-		#self.num_workers = os.cpu_count()
-		self.num_workers = 0
+		self.num_workers = os.cpu_count()
+		#self.num_workers = 0
 		
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 10
@@ -240,13 +241,16 @@ class AbstractModel:
 		)
 	
 	
-	def load(self):
+	def load(self, epoch_number=None):
 		
 		"""
 		Load model from file
 		"""
 		
-		is_loaded = self.model_database.load(self.model_name, self.module, self.train_status)
+		is_loaded = self.model_database.load(self.model_name,
+			self.module, self.train_status,
+			epoch_number=epoch_number
+		)
 		if is_loaded:
 			self._is_trained = self.check_is_trained()
 		
@@ -361,6 +365,9 @@ class AbstractModel:
 		Train model
 		"""
 		
+		if self._is_trained:
+			return
+		
 		# Adam optimizer
 		if self.optimizer is None:
 			self.optimizer = torch.optim.Adam(self.module.parameters(), lr=3e-4)
@@ -394,7 +401,6 @@ class AbstractModel:
 		
 		# Do train
 		train_status = self.train_status
-		train_status.epoch_number = 1
 		train_status.do_training = True
 		train_status.train_data_count = self.get_train_data_count()
 		train_status.on_start_train()
@@ -404,6 +410,8 @@ class AbstractModel:
 			while True:
 				
 				train_status.clear_iter()
+				train_status.epoch_number = train_status.epoch_number + 1
+				train_status.time_start = time.time()
 				train_status.on_start_epoch()
 				
 				# Train batch
@@ -447,7 +455,6 @@ class AbstractModel:
 					if torch.cuda.is_available():
 						torch.cuda.empty_cache()
 				
-					
 				# Test batch
 				for batch_x, batch_y in self.test_loader:
 					
@@ -485,12 +492,12 @@ class AbstractModel:
 						torch.cuda.empty_cache()
 				
 				# Epoch callback
+				train_status.time_end = time.time()
 				train_status.on_end_epoch()
+				self.on_end_epoch()
 				
 				if not train_status.do_training:
 					break
-				
-				train_status.epoch_number = train_status.epoch_number + 1
 			
 			self._is_trained = True
 			
@@ -560,6 +567,7 @@ def do_train(model:AbstractModel, summary=False):
 	
 	# Train the model
 	if not model.is_trained():
+		print ("Train model " + str(model.model_name))
 		model.train()
 		model.show_train_history()
 		

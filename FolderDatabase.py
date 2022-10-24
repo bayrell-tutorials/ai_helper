@@ -206,7 +206,7 @@ class FolderDatabase:
 		self.db_con = None
 		
 	
-	def read_database(self, layer=0):
+	def read_database(self):
 		
 		"""
 		Read database
@@ -214,12 +214,11 @@ class FolderDatabase:
 		
 		sql = """
 			select * from "dataset"
-			where layer=:layer
 			order by id asc
 		"""
 		
 		cur = self.db_con.cursor()
-		res = cur.execute(sql, {"layer": layer})
+		res = cur.execute(sql)
 		batch_size = 1024
 		
 		while True:
@@ -389,7 +388,7 @@ class FolderDatabase:
 	
 	
 	
-	def add_record(self, record, layer=0):
+	def add_record(self, record):
 		
 		"""
 		Add record
@@ -477,7 +476,7 @@ class FolderDatabase:
 			
 			self.save_layer(layer)
 			self.save_answer(answer, layer)
-			self.add_record(record, layer)
+			self.add_record(record)
 		
 		pass
 	

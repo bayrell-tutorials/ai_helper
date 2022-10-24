@@ -69,6 +69,7 @@ def create_model_db(db_con):
 		batch_test_iter integer NOT NULL,
 		train_count integer NOT NULL,
 		test_count integer NOT NULL,
+		time real NOT NULL,
 		info text NOT NULL,
 		PRIMARY KEY ("model_name", "epoch_number")
 	)"""
@@ -164,7 +165,7 @@ class ModelDatabase:
 					acc_train_iter, acc_test_iter,
 					loss_train_iter, loss_test_iter,
 					batch_train_iter, batch_test_iter,
-					train_count, test_count,
+					train_count, test_count, time,
 					info
 				) values
 				(:model_name, :epoch_number, :acc_train,
@@ -172,7 +173,7 @@ class ModelDatabase:
 					:acc_train_iter, :acc_test_iter,
 					:loss_train_iter, :loss_test_iter,
 					:batch_train_iter, :batch_test_iter,
-					:train_count, :test_count,
+					:train_count, :test_count, :time,
 					:info
 				)
 			"""
@@ -193,6 +194,7 @@ class ModelDatabase:
 				"batch_test_iter": train_status.batch_test_iter,
 				"train_count": train_status.train_count_iter,
 				"test_count": train_status.test_count_iter,
+				"time": train_status.get_time(),
 				"info": "{}",
 			})
 			cur.close()
@@ -234,8 +236,8 @@ class ModelDatabase:
 			train_status.epoch_number = record["epoch_number"]
 			train_status.batch_train_iter = record["batch_train_iter"]
 			train_status.batch_test_iter = record["batch_test_iter"]
-			train_status.train_count = record["train_count"]
-			train_status.test_count = record["test_count"]
+			train_status.train_count_iter = record["train_count"]
+			train_status.test_count_iter = record["test_count"]
 			train_status.loss_train_iter = record["loss_train_iter"]
 			train_status.loss_test_iter = record["loss_test_iter"]
 			train_status.acc_train_iter = record["acc_train_iter"]
@@ -271,13 +273,14 @@ class ModelDatabase:
 			torch.save(module.state_dict(), file_name)
 	
 	
-	def save(self, model_name, module, train_status, epoch_number=None):
+	def save(self, model_name, module, train_status):
 		
 		"""
 		Save model
 		"""
 		
-		self.save_file(model_name, module, epoch_number)
+		self.save_file(model_name, module)
+		self.save_file(model_name, module, train_status.epoch_number)
 		self.save_train_status(model_name, train_status)
 		
 	

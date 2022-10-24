@@ -22,6 +22,8 @@ class TrainStatus:
 	epoch_number = 0
 	do_training = True
 	train_data_count = 0
+	time_start = 0
+	time_end = 0
 	history = {}
 	callbacks = []
 	
@@ -96,6 +98,8 @@ class TrainStatus:
 	def stop_train(self):
 		self.do_training = False
 	
+	def get_time(self):
+		return self.time_end - self.time_start
 	
 	"""	====================== Events ====================== """
 	
@@ -140,7 +144,6 @@ class TrainStatus:
 		self.history["acc_train"].append(acc_train)
 		self.history["acc_test"].append(acc_test)
 		self.history["acc_rel"].append(acc_rel)
-		self.model.on_end_epoch()
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_epoch"):
