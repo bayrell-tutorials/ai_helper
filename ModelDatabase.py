@@ -131,12 +131,12 @@ class ModelDatabase:
 		sql = """
 			insert or replace into models (
 				model_name, epoch_number, acc_train,
-				acc_test, loss_train, loss_test,
+				acc_test, acc_rel, loss_train, loss_test,
 				info
 			) values
 			(
 				:model_name, :epoch_number, :acc_train,
-				:acc_test, :loss_train, :loss_test,
+				:acc_test, :acc_rel, :loss_train, :loss_test,
 				:info
 			)
 		"""
@@ -147,6 +147,7 @@ class ModelDatabase:
 			"epoch_number": train_status.epoch_number,
 			"acc_train": train_status.get_acc_train(),
 			"acc_test": train_status.get_acc_test(),
+			"acc_rel": train_status.get_acc_rel(),
 			"loss_train": train_status.get_loss_train(),
 			"loss_test": train_status.get_loss_test(),
 			"info": "{}",
