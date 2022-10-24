@@ -59,6 +59,7 @@ def create_model_db(db_con):
 		epoch_number integer NOT NULL,
 		acc_train real NOT NULL,
 		acc_test real NOT NULL,
+		acc_rel real NOT NULL,
 		loss_train real NOT NULL,
 		loss_test real NOT NULL,
 		acc_train_iter real NOT NULL,
@@ -133,7 +134,8 @@ class ModelDatabase:
 				acc_test, loss_train, loss_test,
 				info
 			) values
-			(:model_name, :epoch_number, :acc_train,
+			(
+				:model_name, :epoch_number, :acc_train,
 				:acc_test, :loss_train, :loss_test,
 				:info
 			)
@@ -161,15 +163,16 @@ class ModelDatabase:
 			sql = """
 				insert or replace into history (
 					model_name, epoch_number, acc_train,
-					acc_test, loss_train, loss_test,
+					acc_test, acc_rel, loss_train, loss_test,
 					acc_train_iter, acc_test_iter,
 					loss_train_iter, loss_test_iter,
 					batch_train_iter, batch_test_iter,
 					train_count, test_count, time,
 					info
 				) values
-				(:model_name, :epoch_number, :acc_train,
-					:acc_test, :loss_train, :loss_test,
+				(
+					:model_name, :epoch_number, :acc_train,
+					:acc_test, :acc_rel, :loss_train, :loss_test,
 					:acc_train_iter, :acc_test_iter,
 					:loss_train_iter, :loss_test_iter,
 					:batch_train_iter, :batch_test_iter,
@@ -184,6 +187,7 @@ class ModelDatabase:
 				"epoch_number": train_status.epoch_number,
 				"acc_train": train_status.get_acc_train(),
 				"acc_test": train_status.get_acc_test(),
+				"acc_rel": train_status.get_acc_rel(),
 				"loss_train": train_status.get_loss_train(),
 				"loss_test": train_status.get_loss_test(),
 				"acc_train_iter": train_status.acc_train_iter,

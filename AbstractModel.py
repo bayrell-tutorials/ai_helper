@@ -183,6 +183,9 @@ class AbstractModel:
 		self.module = ExtendModule(self)
 		self.module.init_layers(layers, debug=debug)
 		self._is_trained = False
+		
+		if debug:
+			self.summary()
 	
 	
 	def summary(self):
@@ -414,6 +417,8 @@ class AbstractModel:
 				train_status.time_start = time.time()
 				train_status.on_start_epoch()
 				
+				module.train()
+				
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
@@ -447,6 +452,7 @@ class AbstractModel:
 					train_status.batch_train_iter = train_status.batch_train_iter + 1
 					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
 					
+					train_status.time_end = time.time()
 					train_status.on_end_batch_train(batch_x, batch_y)
 					
 					del batch_x, batch_y
@@ -454,6 +460,8 @@ class AbstractModel:
 					# Clear CUDA
 					if torch.cuda.is_available():
 						torch.cuda.empty_cache()
+				
+				module.eval()
 				
 				# Test batch
 				for batch_x, batch_y in self.test_loader:
@@ -483,6 +491,7 @@ class AbstractModel:
 					train_status.batch_test_iter = train_status.batch_test_iter + 1
 					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
 					
+					train_status.time_end = time.time()
 					train_status.on_end_batch_test(batch_x, batch_y)
 					
 					del batch_x, batch_y
@@ -972,6 +981,7 @@ class ExtendModule(torch.nn.Module):
 		self._shapes.append( ("Input", vector_x.shape) )
 		
 		if debug:
+			print ("Debug model " + str(self._model.model_name))
 			print ("Input:" + " " + str( tuple(vector_x.shape) ))
 		
 		index = 1
