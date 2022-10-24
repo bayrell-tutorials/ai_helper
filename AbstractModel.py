@@ -18,7 +18,7 @@ from .ModelDatabase import *
 class AbstractModel:
 	
 	
-	def __init__(self):
+	def __init__(self, *args, **kwargs):
 		
 		from .TrainStatus import TrainStatus
 		self.train_status = TrainStatus()
@@ -32,23 +32,47 @@ class AbstractModel:
 		self.optimizer = None
 		self.loss = None
 		self.verbose = True
-		self.num_workers = os.cpu_count()
-		self.max_epochs = 50
-		self.min_epochs = 10
-		self.max_acc = 0.95
-		self.max_acc_rel = 1.5
-		self.min_loss_test = 0.001
-		self.input_shape = (1)
-		self.output_shape = (1)
-		self.onnx_path = "web"
-		self.onnx_opset_version = 9
-		self.model_name = ""
+		#self.num_workers = os.cpu_count()
+		self.num_workers = 0
+		
+		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
+		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 10
+		self.max_acc = kwargs["max_acc"] if "max_acc" in kwargs else 0.95
+		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 1.5
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.001
+		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
+		self.input_shape = kwargs["input_shape"] if "input_shape" in kwargs else (1)
+		self.output_shape = kwargs["output_shape"] if "output_shape" in kwargs else (1)
+		
+		self.onnx_path = kwargs["onnx_path"] \
+			if "onnx_path" in kwargs else os.path.join(os.getcwd(), "web")
+		self.onnx_opset_version = kwargs["onnx_opset_version"] \
+			if "onnx_opset_version" in kwargs else 9
+		self.model_name = kwargs["model_name"] if "model_name" in kwargs else ""
+		
+		self.model_path = kwargs["model_path"] \
+			if "model_path" in kwargs else os.path.join(os.getcwd(), "data", "model")
+		
 		self.model_database = ModelDatabase()
-		self.model_database.set_path( os.path.join(os.getcwd(), "data", "model") )
+		self.model_database.set_path( self.model_path )
 		
-		self._is_debug = False
 		self._is_trained = False
+		self._is_debug = kwargs["debug"] if "debug" in kwargs else False
+		self._read_tensor = kwargs["read_tensor"] if "read_tensor" in kwargs else None
+		self._convert_batch = kwargs["convert_batch"] if "convert_batch" in kwargs else None
+		self._check_is_trained = kwargs["check_is_trained"] \
+			if "check_is_trained" in kwargs else None
+			
+		self.layers = kwargs["layers"] if "layers" in kwargs else None
+		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
+		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
 		
+		if self.layers is not None:
+			self.create_model_ex(
+				model_name = self.model_name,
+				layers = self.layers,
+				debug = self._is_debug,
+			)
 		
 	def debug(self, value):
 		
@@ -57,16 +81,6 @@ class AbstractModel:
 		"""
 		
 		self._is_debug = value
-		
-		
-	def print_debug(self, *args):
-		
-		"""
-		Print if debug level is True
-		"""
-		
-		if self._is_debug:
-			print(*args)
 		
 		
 	def get_tensor_device(self):
@@ -87,31 +101,13 @@ class AbstractModel:
 		return self.model_name
 	
 	
-	def get_model_path(self):
-		
-		"""
-		Returns model path
-		"""
-		
-		return os.path.join(os.getcwd(), "data", "model", self.model_name + ".zip")
-	
-	
 	def get_onnx_path(self):
 		
 		"""
 		Returns model onnx path
 		"""
 		
-		return os.path.join(os.getcwd(), self.onnx_path, self.model_name + ".onnx")
-	
-	
-	def is_loaded(self):
-		
-		"""
-		Returns true if model is loaded
-		"""
-		
-		return self.module is not None
+		return os.path.join(self.onnx_path, self.model_name + ".onnx")
 	
 	
 	def is_trained(self):
@@ -120,39 +116,7 @@ class AbstractModel:
 		Returns true if model is loaded
 		"""
 		
-		return self.is_loaded() and self._is_trained
-	
-	
-	def load_dataset(self, **kwargs):
-		
-		"""
-		Load dataset
-		"""
-		
-		type = None
-		count = None
-		
-		if "type" in kwargs:
-			type = kwargs["type"]
-		
-		if "count" in kwargs:
-			count = kwargs["count"]
-		
-		if type == "train":
-			
-			self.train_dataset, self.test_dataset = self.get_train_dataset()
-	
-	
-	def get_train_dataset(self, **kwargs):
-		
-		"""
-		Returns normalized train and test datasets
-		"""
-		
-		train_dataset = TensorDataset( torch.tensor(), torch.tensor() )
-		test_dataset = TensorDataset( torch.tensor(), torch.tensor() )
-		
-		return train_dataset, test_dataset
+		return (self.module is not None) and self._is_trained
 	
 	
 	def get_train_data_count(self):
@@ -185,6 +149,9 @@ class AbstractModel:
 		"""
 		Convert batch
 		"""
+		
+		if self._convert_batch is not None:
+			return self._convert_batch(self, x=x, y=y)
 		
 		if x is not None:
 			x = x.to(torch.float)
@@ -225,7 +192,7 @@ class AbstractModel:
 		
 		tensor_device = self.get_tensor_device()
 		module = self.module.to(tensor_device)
-		summary(self.module, self.input_shape, device=str(tensor_device))
+		summary(self.module, tuple(self.input_shape), device=str(tensor_device))
 		
 		if (isinstance(self.module, ExtendModule)):
 			for arr in self.module._shapes:
@@ -338,25 +305,28 @@ class AbstractModel:
 		Returns True if model is trained
 		"""
 		
+		if self._check_is_trained is not None:
+			return self._check_is_trained(self)
+		
 		epoch_number = self.train_status.epoch_number
 		acc_train = self.train_status.get_acc_train()
 		acc_test = self.train_status.get_acc_test()
 		acc_rel = self.train_status.get_acc_rel()
 		loss_test = self.train_status.get_loss_test()
 		
-		if epoch_number >= 50:
+		if epoch_number >= self.max_epochs:
 			return True
 		
-		if acc_train > 0.95 and epoch_number >= 10:
+		if acc_train > self.max_acc and epoch_number >= self.min_epochs:
 			return True
 		
-		if acc_test > 0.95  and epoch_number >= 10:
+		if acc_test > self.max_acc  and epoch_number >= self.min_epochs:
 			return True
 		
-		if acc_rel > 1.5 and acc_train > 0.8:
+		if acc_rel > self.max_acc_rel and acc_train > 0.8:
 			return True
 		
-		if loss_test < 0.001 and epoch_number >= 10:
+		if loss_test < self.min_loss_test and epoch_number >= self.min_epochs:
 			return True
 		
 		return False
@@ -450,7 +420,7 @@ class AbstractModel:
 
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_train = train_status.loss_train + loss_value.item()
+					train_status.loss_train_iter = train_status.loss_train_iter + loss_value.item()
 					
 					# Gradient
 					self.optimizer.zero_grad()
@@ -465,9 +435,9 @@ class AbstractModel:
 						batch_predict = batch_predict,
 						type = "train"
 					)
-					train_status.acc_train = train_status.acc_train + accuracy
+					train_status.acc_train_iter = train_status.acc_train_iter + accuracy
 					train_status.batch_train_iter = train_status.batch_train_iter + 1
-					train_status.train_count = train_status.train_count + batch_x.shape[0]
+					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
 					
 					train_status.on_end_batch_train(batch_x, batch_y)
 					
@@ -492,7 +462,7 @@ class AbstractModel:
 					
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_test = train_status.loss_test + loss_value.item()
+					train_status.loss_test_iter = train_status.loss_test_iter + loss_value.item()
 					
 					# Calc accuracy
 					accuracy = self.check_answer_batch(
@@ -502,9 +472,9 @@ class AbstractModel:
 						batch_predict = batch_predict,
 						type = "test"
 					)
-					train_status.acc_test = train_status.acc_test + accuracy
+					train_status.acc_test_iter = train_status.acc_test_iter + accuracy
 					train_status.batch_test_iter = train_status.batch_test_iter + 1
-					train_status.test_count = train_status.test_count + batch_x.shape[0]
+					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
 					
 					train_status.on_end_batch_test(batch_x, batch_y)
 					
@@ -533,8 +503,8 @@ class AbstractModel:
 			pass
 		
 		train_status.on_end_train()
-		
-		
+	
+	
 	def show_train_history(self):
 		
 		"""
@@ -587,12 +557,9 @@ def do_train(model:AbstractModel, summary=False):
 	
 	if summary:
 		model.summary()
-			
-	# Load dataset
-	model.load_dataset(type="train")
 	
 	# Train the model
-	if model.is_trained():
+	if not model.is_trained():
 		model.train()
 		model.show_train_history()
 		

@@ -125,11 +125,14 @@ class FolderDatabase:
 	
 	
 	
-	def create(self):
+	def create(self, folder_path=None):
 		
 		"""
 		Create dataset
 		"""
+		
+		if folder_path is not None:
+			self.set_folder(folder_path)
 		
 		db_path = self.get_db_path()
 		
@@ -144,20 +147,25 @@ class FolderDatabase:
 		if os.path.exists(db_path + "-wal"):
 			os.unlink(db_path + "-wal")
 		
-		self.open(read_db=False)
-		self.create_db()
+		self.open(is_read=False)
 	
 	
-	
-	def open(self, read_db=True):
+	def open(self, folder_path=None, is_read=True):
 		
 		"""
 		Open dataset
 		"""
 		
+		if folder_path is not None:
+			self.set_folder(folder_path)
+		
+		is_create = False
 		db_path = self.get_db_path()
 		
 		make_parent_dir(db_path)
+		
+		if not os.path.exists(db_path):
+			is_create = True
 		
 		self.db_con = sqlite3.connect( db_path, isolation_level=None )
 		self.db_con.row_factory = sqlite3.Row
@@ -166,7 +174,10 @@ class FolderDatabase:
 		res = cur.execute("PRAGMA journal_mode = WAL;")
 		cur.close()
 		
-		if read_db:
+		if is_create:
+			self.create_db()
+		
+		if is_read:
 			self.read_database()
 	
 	
@@ -241,7 +252,7 @@ class FolderDatabase:
 		
 		cur = self.db_con.cursor()
 		res = cur.execute(sql, {"answer": answer, "layer": layer})
-		record = res.fetchone();
+		record = res.fetchone()
 		cur.close()
 		
 		return record
@@ -502,7 +513,7 @@ class FolderDatabase:
 		if isinstance(file_content, Image.Image):
 			file_ext="jpg"
 		
-		elif torch.is_tensor(file_content):
+		else:
 			file_ext="data"
 		
 		layer = kwargs["layer"] if "layer" in kwargs else 0
@@ -521,7 +532,7 @@ class FolderDatabase:
 		if isinstance(file_content, Image.Image):
 			file_content.save(file_path)
 		
-		elif torch.is_tensor(file_content):
+		else:
 			torch.save(file_content, file_path)
 		
 		kwargs["file_name"] = file_name

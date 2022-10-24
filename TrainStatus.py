@@ -15,10 +15,10 @@ class TrainStatus:
 	batch_test_iter = 0
 	train_count = 0
 	test_count = 0
-	loss_train = 0
-	loss_test = 0
-	acc_train = 0
-	acc_test = 0
+	loss_train_iter = 0
+	loss_test_iter = 0
+	acc_train_iter = 0
+	acc_test_iter = 0
 	epoch_number = 0
 	do_training = True
 	train_data_count = 0
@@ -36,34 +36,50 @@ class TrainStatus:
 			"acc_rel": [],
 		}
 	
+	def clear(self):
+		self.history = {
+			"loss_train": [],
+			"loss_test": [],
+			"acc_train": [],
+			"acc_test": [],
+			"acc_rel": [],
+		}
+		self.clear_iter()
+	
 	def clear_iter(self):
 		self.batch_train_iter = 0
 		self.batch_test_iter = 0
-		self.train_count = 0
-		self.test_count = 0
-		self.loss_train = 0
-		self.loss_test = 0
-		self.acc_train = 0
-		self.acc_test = 0
+		self.train_count_iter = 0
+		self.test_count_iter = 0
+		self.loss_train_iter = 0
+		self.loss_test_iter = 0
+		self.acc_train_iter = 0
+		self.acc_test_iter = 0
 	
 	def get_iter_value(self):
-		return self.train_count / self.train_data_count
+		if self.train_data_count == 0:
+			return 0
+		return self.train_count_iter / self.train_data_count
 	
 	def get_loss_train(self):
-		return self.loss_train / self.batch_train_iter
+		if self.batch_train_iter == 0:
+			return 0
+		return self.loss_train_iter / self.batch_train_iter
 	
 	def get_loss_test(self):
-		return self.loss_test / self.batch_test_iter
+		if self.batch_test_iter == 0:
+			return 0
+		return self.loss_test_iter / self.batch_test_iter
 	
 	def get_acc_train(self):
-		if self.train_count == 0:
+		if self.train_count_iter == 0:
 			return 0
-		return self.acc_train / self.train_count
+		return self.acc_train_iter / self.train_count_iter
 	
 	def get_acc_test(self):
-		if self.test_count == 0:
+		if self.test_count_iter == 0:
 			return 0
-		return self.acc_test / self.test_count
+		return self.acc_test_iter / self.test_count_iter
 	
 	def get_acc_rel(self):
 		acc_train = self.get_acc_train()
@@ -73,6 +89,8 @@ class TrainStatus:
 		return acc_train / acc_test
 	
 	def get_loss_rel(self):
+		if self.loss_test == 0:
+			return 0
 		return self.loss_train / self.loss_test
 	
 	def stop_train(self):
