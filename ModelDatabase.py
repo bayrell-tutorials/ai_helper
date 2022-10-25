@@ -48,6 +48,7 @@ def create_model_db(db_con):
 		epoch_number integer NOT NULL,
 		acc_train real NOT NULL,
 		acc_test real NOT NULL,
+		acc_rel real NOT NULL,
 		loss_train real NOT NULL,
 		loss_test real NOT NULL,
 		info text NOT NULL
