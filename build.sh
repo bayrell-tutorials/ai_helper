@@ -3,31 +3,29 @@
 SCRIPT=$(readlink -f $0)
 SCRIPT_PATH=`dirname $SCRIPT`
 BASE_PATH=`dirname $SCRIPT_PATH`
-version="0.0.2"
+version="0.0.3"
 
 case "$1" in
 	
 	build)
-		python3.8 setup.py sdist bdist_wheel
+		python3 setup.py sdist bdist_wheel
 	;;
 	
 	install)
-		python3.8 setup.py sdist bdist_wheel
-		echo "Install. Need root password"
-		sudo pip3.8 install dist/tiny_ai_helper-$version.tar.gz
+		python3 setup.py sdist bdist_wheel
+		pip3 install dist/tiny_ai_helper-$version.tar.gz
 	;;
 	
 	uninstall)
-		echo "Uninstall. Need root password"
-		sudo pip3.8 uninstall tiny_ai_helper
+		pip3 uninstall tiny_ai_helper
 	;;
 	
 	install-dev)
-		python3.8 setup.py develop
+		python3 setup.py develop --prefix=~/.local
 	;;
 	
 	uninstall-dev)
-		python3.8 setup.py develop -u
+		python3 setup.py develop -u --prefix=~/.local
 	;;
 	
 	upload)
