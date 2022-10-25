@@ -195,11 +195,14 @@ class AbstractModel:
 		)
 	
 	
-	def load(self, epoch_number=None):
+	def load(self, path=None, epoch_number=None):
 		
 		"""
 		Load model from file
 		"""
+		
+		if path is not None:
+			self.set_model_path(path)
 		
 		load_model(self, epoch_number=epoch_number)
 	
