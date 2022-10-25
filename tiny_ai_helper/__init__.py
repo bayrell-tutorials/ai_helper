@@ -13,7 +13,7 @@ from .FolderDatabase import FolderDatabase, FolderDataset, \
 from .TrainStatus import TrainStatus
 from .TrainVerboseCallback import TrainVerboseCallback
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 __all__ = (
 	
