@@ -104,6 +104,31 @@ def init_tensorflow_gpu(memory_limit=1024):
 	    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=memory_limit)])
 
 
+
+def resize_image(image, size, contain=True, color=None):
+	
+	"""
+	Resize image canvas
+	"""
+	
+	if contain:
+		image_new = image.copy()
+		image_new.thumbnail(size, Image.LANCZOS)
+		image_new = resize_image_canvas(image_new, size)
+		return image_new
+	
+	width, height = image.size
+	rect = (width, width)
+	if width > height:
+		rect = (height, height)
+
+	image_new = resize_image_canvas(image, rect)
+	image_new.thumbnail(size, Image.Resampling.LANCZOS)
+	
+	return image_new
+	
+
+
 def resize_image_canvas(image, size, color=None):
 	
 	"""
@@ -130,9 +155,9 @@ def resize_image_canvas(image, size, color=None):
 	del draw, image
 	
 	return image_new
-	
-	
-def image_to_tensor(image_bytes, mode=None):
+
+
+def convert_image_to_tensor(image_bytes, mode=None):
 	
 	"""
 	Convert image to numpy vector
@@ -141,6 +166,9 @@ def image_to_tensor(image_bytes, mode=None):
 	image = None
 	
 	try:
+		
+		if isinstance(image_bytes, str):
+			image_bytes = Image.open(image_bytes)
 		
 		if isinstance(image_bytes, bytes):
 			image = Image.open(io.BytesIO(image_bytes))
@@ -159,21 +187,29 @@ def image_to_tensor(image_bytes, mode=None):
 	
 	tensor = torch.from_numpy( np.array(image) )
 	tensor = tensor.to(torch.uint8)
+	tensor = torch.moveaxis(tensor, 2, 0)
 	
 	del image
 	
 	return tensor
-	
 
-def show_image_in_plot(image, cmap=None, first_channel=False):
+
+def show_image_in_plot(image, cmap=None, is_float=False, first_channel=True):
 	
 	"""
 	Plot show image
 	"""
 	
+	if isinstance(image, str):
+		image = Image.open(image)
+	
 	if torch.is_tensor(image):
 		if first_channel == True:
 			image = torch.moveaxis(image, 0, 2)
+		
+		if is_float:
+			image = image * 255
+			image = image.to(torch.uint8)
 	
 	plt.imshow(image, cmap)
 	plt.show()

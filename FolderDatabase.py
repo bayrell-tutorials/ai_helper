@@ -9,12 +9,12 @@ import io, os, random, math, sqlite3, json, torch
 
 from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
-from .Utils import alphanum_sort, list_dirs, list_files, make_parent_dir
+from .Utils import *
 
 
 class FolderDatabase:
 	
-	def __init__(self, read_tensor=None):
+	def __init__(self, read_tensor=None, get_tensor_from_answer=None):
 		
 		self.chunk_folder_names = (1, 2)
 		self.folder_path = ""
@@ -22,8 +22,7 @@ class FolderDatabase:
 		self.answers = {}
 		self.records = {}
 		self.layers = []
-		self._read_tensor = read_tensor
-	
+		self._get_tensor_from_answer = get_tensor_from_answer
 	
 	def set_folder(self, path):
 		
@@ -366,6 +365,26 @@ class FolderDatabase:
 		
 		return self.records[layer][index]
 		
+		
+	
+	def find_record_by_id(self, id):
+		
+		"""
+		Returns record by id
+		"""
+		
+		sql = """
+			select * from dataset
+			where id=:id
+		"""
+		
+		cur = self.db_con.cursor()
+		res = cur.execute(sql, {"id": id})
+		record = res.fetchone();
+		cur.close()
+		
+		return record
+	
 	
 	
 	def find_record_by_file_name(self, file_name="", layer=0):
@@ -529,7 +548,7 @@ class FolderDatabase:
 		make_parent_dir(file_path)
 		
 		if isinstance(file_content, Image.Image):
-			file_content.save(file_path)
+			file_content.save(file_path, quality=100)
 		
 		else:
 			torch.save(file_content, file_path)
@@ -540,17 +559,61 @@ class FolderDatabase:
 		pass
 	
 	
+	def read_tensor_by_id(self, id):
+		
+		"""
+		Read tensor by id
+		"""
+		
+		record = self.find_record_by_id(id)
+		if record is None:
+			return None, None, None
+		
+		file_path = self.get_file_path(record["file_name"])
+		
+		_, file_ext = os.path.splitext( file_path )
+		
+		if file_ext == ".data":
+			tensor = torch.load(file_path)
+		
+		else:
+			tensor = convert_image_to_tensor(file_path)
+		
+		answer = record["answer"]
+		
+		if self._get_tensor_from_answer:
+			answer = self._get_tensor_from_answer(answer)
+		
+		return (tensor, answer, record)
+	
+	
 	
 	def read_tensor(self, index, layer=0):
 		
 		"""
-		Read tensor
+		Read tensor by index
 		"""
 		
-		if self._read_tensor:
-			return self._read_tensor(self, index, layer)
+		record = self.get_record_by_index(index, layer=layer)
+		if record is None:
+			return None, None, None
 		
-		return None
+		file_path = self.get_file_path(record["file_name"])
+		
+		_, file_ext = os.path.splitext( file_path )
+		
+		if file_ext == ".data":
+			tensor = torch.load(file_path)
+		
+		else:
+			tensor = convert_image_to_tensor(file_path)
+		
+		answer = record["answer"]
+		
+		if self._get_tensor_from_answer:
+			answer = self._get_tensor_from_answer(answer)
+		
+		return (tensor, answer, record)
 	
 	
 	
@@ -576,8 +639,8 @@ class FolderDataset(Dataset):
 	
 	
 	def __getitem__(self, index):
-		data = self.database.read_tensor(index, layer=self.layer)
-		return ( data[0], data[1] )
+		tensor, answer, _ = self.database.read_tensor(index, layer=self.layer)
+		return ( tensor, answer )
 	
 	
 	def __len__(self):
@@ -643,9 +706,46 @@ def init_folder_database(type, path, layer=0, db_class=FolderDatabase):
 	db.close()
 
 
+def convert_folder_record(**kwargs):
+		
+	"""
+	Convert folder record
+	"""
+	
+	src = kwargs["src"]
+	dest = kwargs["dest"]
+	record = kwargs["record"]
+	kind = kwargs["kind"] if "kind" in kwargs else ""
+	transform = kwargs["transform"] if "transform" in kwargs else None
+	transform_train = kwargs["transform_train"] if "transform_train" in kwargs else None
+	transform_test = kwargs["transform_test"] if "transform_test" in kwargs else None
+	layer = 0
+	
+	if kind == "train":
+		# Train dataset
+		transform = transform_train
+	
+	elif kind == "test":
+		# Test dataset
+		layer = 1
+		transform = transform_test
+	
+	image = src.get_file_path(record["file_name"])
+	
+	if transform:
+		image = transform(image)
+	
+	dest.save_file(
+		layer=layer,
+		file_content=image,
+		file_index=record["file_index"],
+		record=record,
+	)
+
+
 def convert_folder_database(src_path, dest_path,
 	convert=None, type="", train_k=0.95,
-	db_class=FolderDatabase
+	db_class=FolderDatabase, **kwargs
 ):
 	
 	"""
@@ -682,6 +782,18 @@ def convert_folder_database(src_path, dest_path,
 				src=src,
 				dest=dest,
 				kind=kind,
+				type=type,
+				**kwargs,
+			)
+			
+		else:
+			convert_folder_record(
+				record=record,
+				src=src,
+				dest=dest,
+				kind=kind,
+				type=type,
+				**kwargs,
 			)
 		
 		if iterator_pos % 10 == 0:
