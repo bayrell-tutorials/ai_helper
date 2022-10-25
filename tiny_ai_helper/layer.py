@@ -6,7 +6,7 @@
 ##
 
 import torch
-from .Utils import *
+from .utils import *
 
 
 class AbstractLayerFactory:
@@ -298,8 +298,8 @@ class Transform_Flat(torch.nn.Module):
 		return t
 
 
-def Flat():
-	return Layer("Flat", Transform_Flat())
+def Flat(pos=1):
+	return Layer("Flat", Transform_Flat(pos))
 
 
 class Transform_InsertFirstAxis(torch.nn.Module):
@@ -330,7 +330,7 @@ class Transform_MoveRGBToEnd(torch.nn.Module):
 		return t
 
 
-def ToIntImage():
+def MoveRGBToEnd():
 	return Layer("MoveRGBToEnd", Transform_MoveRGBToEnd())
 
 
@@ -342,7 +342,7 @@ class Transform_MoveRGBToBegin(torch.nn.Module):
 		return t
 
 
-def ToIntImage():
+def MoveRGBToBegin():
 	return Layer("MoveRGBToBegin", Transform_MoveRGBToBegin())
 		
 
@@ -415,6 +415,7 @@ def Resize(size, contain=True, color=None):
 
 
 def ImageNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+	import torchvision
 	return Layer("ImageNormalize",
-		transforms.Normalize(mean=mean, std=std)
+		torchvision.transforms.Normalize(mean=mean, std=std)
 	)

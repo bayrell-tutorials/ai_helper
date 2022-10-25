@@ -114,15 +114,15 @@ def resize_image(image, size, contain=True, color=None):
 	if contain:
 		image_new = image.copy()
 		image_new.thumbnail(size, Image.LANCZOS)
-		image_new = resize_image_canvas(image_new, size)
+		image_new = resize_image_canvas(image_new, size, color=color)
 		return image_new
 	
 	width, height = image.size
 	rect = (width, width)
 	if width > height:
 		rect = (height, height)
-
-	image_new = resize_image_canvas(image, rect)
+	
+	image_new = resize_image_canvas(image, rect, color=color)
 	image_new.thumbnail(size, Image.Resampling.LANCZOS)
 	
 	return image_new
@@ -404,3 +404,30 @@ def make_parent_dir(file_path):
 	if not os.path.isdir(folder_path):
 		os.makedirs(folder_path)
 	
+
+def get_tensor_device():
+		
+	"""
+	Returns tensor device name
+	"""
+	
+	return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
+
+def get_train_history(model):
+		
+	"""
+	Returns train history
+	"""
+	
+	fig, axs = plt.subplots(2)
+	axs[0].plot( np.multiply(model.history['loss_train'], 100), label='train loss')
+	axs[0].plot( np.multiply(model.history['loss_test'], 100), label='test loss')
+	axs[0].legend()
+	axs[1].plot( np.multiply(model.history['acc_train'], 100), label='train acc')
+	axs[1].plot( np.multiply(model.history['acc_test'], 100), label='test acc')
+	axs[1].legend()
+	plt.xlabel('Epoch')
+	
+	return plt

@@ -20,6 +20,7 @@ class FolderDatabase:
 		self.folder_path = ""
 		self.db_con = ""
 		self.answers = {}
+		self.answers_counter = {}
 		self.records = {}
 		self.layers = []
 		self._get_tensor_from_answer = get_tensor_from_answer
@@ -79,6 +80,7 @@ class FolderDatabase:
 		"""
 		
 		self.answers = {}
+		self.answers_counter = {}
 		self.records = {}
 		self.layers = []
 	
@@ -316,6 +318,20 @@ class FolderDatabase:
 			self.answers[layer].append(answer)
 	
 	
+	def inc_answer(self, answer="", layer=0):
+		
+		"""
+		Inc answer counter
+		"""
+		
+		if not (layer in self.answers_counter):
+			self.answers_counter[layer] = {}
+		
+		if not (answer in self.answers_counter[layer]):
+			self.answers_counter[layer][answer] = 0
+		
+		self.answers_counter[layer][answer] = self.answers_counter[layer][answer] + 1
+	
 	
 	def save_answer(self, answer="", layer=0):
 		
@@ -416,7 +432,8 @@ class FolderDatabase:
 		layer = record["layer"]
 		
 		self.add_layer(layer)
-		self.add_answer( record["answer"] )
+		self.add_answer( record["answer"], layer )
+		self.inc_answer( record["answer"], layer )
 		
 		if not (layer in self.records):
 			self.records[layer] = []
