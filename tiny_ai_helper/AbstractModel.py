@@ -540,7 +540,8 @@ class AbstractModel:
 		axs[1].plot( np.multiply(self.train_status.history['acc_train'], 100), label='train acc')
 		axs[1].plot( np.multiply(self.train_status.history['acc_test'], 100), label='test acc')
 		axs[1].legend()
-		fig.supylabel('Percent')
+		if fig.supylabel:
+			fig.supylabel('Percent')
 		plt.xlabel('Epoch')
 		plt.savefig(history_image)
 		plt.show()
@@ -579,7 +580,6 @@ def do_train(model:AbstractModel, summary=False):
 	if not model.is_trained():
 		print ("Train model " + str(model.model_name))
 		model.train()
-		model.show_train_history()
 		
 
 
