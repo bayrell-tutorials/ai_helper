@@ -15,7 +15,7 @@ from .layer import AbstractLayerFactory
 from .utils import *
 
 
-class AbstractModel:
+class Model:
 	
 	
 	def __init__(self, *args, **kwargs):

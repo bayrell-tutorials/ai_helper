@@ -273,7 +273,6 @@ class Layer(AbstractLayerFactory):
 		return self.name
 
 
-
 class Transform_Flat(torch.nn.Module):
 	
 	def __init__(self, pos=1):
@@ -393,7 +392,7 @@ class Transform_ReadImage:
 		return t
 		
 
-class Transform_Resize(torch.nn.Module):
+class Transform_ResizeImage(torch.nn.Module):
 	
 	def __init__(self, size, contain=True, color=None):
 		
@@ -409,13 +408,12 @@ class Transform_Resize(torch.nn.Module):
 		
 		return t
 
-def Resize(size, contain=True, color=None):
-	return Layer("Resize", Transform_Resize(size, contain=contain, color=color))
+def ResizeImage(size, contain=True, color=None):
+	return Layer("ResizeImage", Transform_ResizeImage(size, contain=contain, color=color))
 
 
-
-def ImageNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+def NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
 	import torchvision
-	return Layer("ImageNormalize",
+	return Layer("NormalizeImage",
 		torchvision.transforms.Normalize(mean=mean, std=std)
 	)
