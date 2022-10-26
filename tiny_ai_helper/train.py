@@ -6,7 +6,7 @@
 ##
 
 import os, time, torch
-from torch.utils.data import DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Dataset
 from .utils import get_tensor_device
 
 
@@ -23,11 +23,11 @@ class TrainStatus:
 		self.acc_train_iter = 0
 		self.acc_test_iter = 0
 		self.epoch_number = 0
+		self.trainer = None
 		self.do_training = True
 		self.train_data_count = 0
 		self.time_start = 0
 		self.time_end = 0
-		self.callbacks = []
 	
 	def set_model(self, model):
 		
@@ -102,83 +102,6 @@ class TrainStatus:
 	def get_time(self):
 		return self.time_end - self.time_start
 	
-	"""	====================== Events ====================== """
-	
-	def on_start_train(self):
-		"""
-		Start train event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_start_train"):
-				callback.on_start_train(self)
-		
-	
-	def on_end_train(self):
-		"""
-		End train event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_end_train"):
-				callback.on_end_train(self)
-	
-	
-	def on_start_epoch(self):
-		"""
-		Start epoch event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_start_epoch"):
-				callback.on_start_epoch(self)
-	
-	
-	def on_end_epoch(self):
-		
-		"""
-		End epoch event
-		"""
-		
-		self.model.add_train_status_iter(self)
-		
-		for callback in self.callbacks:
-			if hasattr(callback, "on_end_epoch"):
-				callback.on_end_epoch(self)
-	
-	
-	def on_start_batch_train(self, batch_x, batch_y):
-		"""
-		Start train batch event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_start_batch_train"):
-				callback.on_start_batch_train(self)
-	
-	
-	def on_end_batch_train(self, batch_x, batch_y):
-		"""
-		End train batch event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_end_batch_train"):
-				callback.on_end_batch_train(self)
-	
-	
-	def on_start_batch_test(self, batch_x, batch_y):
-		"""
-		Start test batch event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_start_batch_test"):
-				callback.on_start_batch_test(self)
-	
-	
-	def on_end_batch_test(self, batch_x, batch_y):
-		"""
-		End test batch event
-		"""
-		for callback in self.callbacks:
-			if hasattr(callback, "on_end_batch_test"):
-				callback.on_end_batch_test(self)
-	
 
 class TrainVerboseCallback:
 	
@@ -244,6 +167,7 @@ class Trainer:
 		self.model = model
 		
 		self.train_status = TrainStatus()
+		self.train_status.trainer = self
 		self.train_status.set_model(model)
 		
 		self.train_loader = None
@@ -251,6 +175,7 @@ class Trainer:
 		self.train_dataset = None
 		self.test_dataset = None
 		self.batch_size = 64
+		self.lr = 1e-3
 		
 		self.optimizer = None
 		self.loss = None
@@ -267,14 +192,17 @@ class Trainer:
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
 		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
+		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else True
 		
 		self._check_is_trained = kwargs["check_is_trained"] \
 			if "check_is_trained" in kwargs else None
 		
 		if "callbacks" in kwargs:
-			self.train_status.callbacks = kwargs["callbacks"]
+			self.callbacks = kwargs["callbacks"]
 		else:
-			self.train_status.callbacks = [ TrainVerboseCallback() ]
+			self.callbacks = [
+				TrainVerboseCallback()
+			]
 		
 	
 	def check_is_trained(self):
@@ -306,7 +234,75 @@ class Trainer:
 		
 		return False
 	
+	
+	"""	====================== Events ====================== """
+	
+	def on_start_train(self):
 		
+		"""
+		Start train event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_start_train"):
+				callback.on_start_train(self)
+		
+	
+	def on_start_epoch(self):
+		
+		"""
+		Start epoch event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_start_epoch"):
+				callback.on_start_epoch(self)
+	
+	
+	def on_start_batch_train(self, batch_x, batch_y):
+		
+		"""
+		Start train batch event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_start_batch_train"):
+				callback.on_start_batch_train(self)
+	
+	
+	def on_end_batch_train(self, batch_x, batch_y):
+		
+		"""
+		End train batch event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_end_batch_train"):
+				callback.on_end_batch_train(self)
+	
+	
+	def on_start_batch_test(self, batch_x, batch_y):
+		
+		"""
+		Start test batch event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_start_batch_test"):
+				callback.on_start_batch_test(self)
+	
+	
+	def on_end_batch_test(self, batch_x, batch_y):
+		
+		"""
+		End test batch event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_end_batch_test"):
+				callback.on_end_batch_test(self)
+	
+	
 	def on_end_epoch(self, **kwargs):
 		
 		"""
@@ -318,9 +314,30 @@ class Trainer:
 		if self._is_trained:
 			self.stop_training()
 		
-		self.model.save()
+		self.model.add_train_status_iter(self.train_status)
+		self.model.save(
+			save_epoch=self.save_epoch
+		)
 		
+		if self.save_epoch:
+			self.model.save_optimizer(self.optimizer)
 		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_end_epoch"):
+				callback.on_end_epoch(self)
+		
+	
+	def on_end_train(self):
+		
+		"""
+		End train event
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "on_end_train"):
+				callback.on_end_train(self)
+	
+	
 	def stop_training(self):
 		
 		"""
@@ -340,8 +357,11 @@ class Trainer:
 		
 		# Adam optimizer
 		if self.optimizer is None:
-			self.optimizer = torch.optim.Adam(model.module.parameters(), lr=3e-4)
+			self.optimizer = torch.optim.Adam(model.module.parameters(), lr=self.lr)
 		
+		if self.save_epoch:
+			model.load_optimizer(self.optimizer)
+			
 		# Mean squared error
 		if self.loss is None:
 			self.loss = torch.nn.MSELoss()
@@ -373,7 +393,7 @@ class Trainer:
 		train_status = self.train_status
 		train_status.do_training = True
 		train_status.train_data_count = len(self.train_dataset)
-		train_status.on_start_train()
+		self.on_start_train()
 		
 		try:
 		
@@ -382,7 +402,7 @@ class Trainer:
 				train_status.clear_iter()
 				train_status.epoch_number = train_status.epoch_number + 1
 				train_status.time_start = time.time()
-				train_status.on_start_epoch()
+				self.on_start_epoch()
 				
 				module.train()
 				
@@ -393,7 +413,7 @@ class Trainer:
 					batch_y = batch_y.to(tensor_device)
 					batch_x, batch_y = model.convert_batch(x=batch_x, y=batch_y)
 					
-					train_status.on_start_batch_train(batch_x, batch_y)
+					self.on_start_batch_train(batch_x, batch_y)
 					
 					# Predict model
 					batch_predict = module(batch_x)
@@ -420,7 +440,7 @@ class Trainer:
 					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
 					
 					train_status.time_end = time.time()
-					train_status.on_end_batch_train(batch_x, batch_y)
+					self.on_end_batch_train(batch_x, batch_y)
 					
 					del batch_x, batch_y
 					
@@ -437,7 +457,7 @@ class Trainer:
 					batch_y = batch_y.to(tensor_device)
 					batch_x, batch_y = model.convert_batch(x=batch_x, y=batch_y)
 					
-					train_status.on_start_batch_test(batch_x, batch_y)
+					self.on_start_batch_test(batch_x, batch_y)
 					
 					# Predict model
 					batch_predict = module(batch_x)
@@ -459,7 +479,7 @@ class Trainer:
 					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
 					
 					train_status.time_end = time.time()
-					train_status.on_end_batch_test(batch_x, batch_y)
+					self.on_end_batch_test(batch_x, batch_y)
 					
 					del batch_x, batch_y
 					
@@ -469,7 +489,6 @@ class Trainer:
 				
 				# Epoch callback
 				train_status.time_end = time.time()
-				train_status.on_end_epoch()
 				self.on_end_epoch()
 				
 				if not train_status.do_training:
@@ -483,7 +502,7 @@ class Trainer:
 			
 			pass
 		
-		train_status.on_end_train()
+		self.on_end_train()
 	
 
 def do_train(model, *args, **kwargs):
@@ -500,3 +519,37 @@ def do_train(model, *args, **kwargs):
 		trainer.train()
 	
 	return trainer
+
+
+class FilesListDataset(Dataset):
+	
+	def __init__(self, files, folder_path="", transform=None, get_tensor_from_answer=None):
+		
+		self.files = files
+		self.folder_path = folder_path
+		self.transform = transform
+		self.get_tensor_from_answer = get_tensor_from_answer
+	
+	
+	def __getitem__(self, index):
+		
+		file_path = ""
+		answer = None
+		
+		if self.get_tensor_from_answer is None:
+			file_path = self.files[index]
+		else:
+			file_path, answer = self.files[index]
+		
+		if self.folder_path != "":
+			file_path = os.path.join(self.folder_path, file_path)
+		
+		tensor = self.transform(file_path)
+		
+		if self.get_tensor_from_answer is None:
+			answer = self.get_tensor_from_answer(answer)
+		
+		return ( tensor, answer )
+	
+	def __len__(self):
+		return len(self.files)

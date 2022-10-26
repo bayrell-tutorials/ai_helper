@@ -154,13 +154,22 @@ class Model:
 				print ( arr[0] + " => " + str(tuple(arr[1])) )
 	
 	
-	def save(self):
+	def save(self, optimizer=None, save_epoch=False):
 		
 		"""
 		Save model to file
 		"""
 		
-		save_model(self)
+		save_model(self, save_epoch=save_epoch)
+	
+	
+	def save_optimizer(self, optimizer):
+		
+		"""
+		Save optimizer to file
+		"""
+		
+		save_optimizer_file(self, optimizer)
 	
 	
 	def save_onnx(self, tensor_device=None):
@@ -195,16 +204,28 @@ class Model:
 		)
 	
 	
-	def load(self, path=None, epoch_number=None):
+	def load(self, folder_path=None, repository_path=None, epoch_number=None):
 		
 		"""
 		Load model from file
 		"""
 		
-		if path is not None:
-			self.set_model_path(path)
+		if folder_path is not None:
+			self.set_model_path(folder_path)
+		
+		if repository_path is not None:
+			self.set_model_path( os.path.join(repository_path, self.model_name) )
 		
 		load_model(self, epoch_number=epoch_number)
+	
+	
+	def load_optimizer(self, optimizer):
+		
+		"""
+		Load optimizer
+		"""
+		
+		load_optimizer(self, optimizer)
 	
 	
 	def check_answer(self, **kwargs):
@@ -267,10 +288,40 @@ class Model:
 		module = self.module.to(tensor_device)
 		x, _ = self.convert_batch(x=x)
 		
-		y = module(y)
+		y = module(x)
 		
 		return y
 	
+	
+	def predict_dataset(self, dataset, batch_size=32, tensor_device=None):
+		
+		if tensor_device is None:
+			tensor_device = get_tensor_device()
+		
+		loader = DataLoader(
+			self.test_dataset,
+			num_workers=self.num_workers,
+			batch_size=self.batch_size,
+			drop_last=False,
+			shuffle=False
+		)
+		
+		res = torch.tensor([])
+		
+		for batch_x, batch_y in self.loader:
+			
+			batch_x = batch_x.to(tensor_device)
+			batch_y = batch_y.to(tensor_device)
+			
+			batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
+			
+			batch_predict = module(batch_x)
+			batch_predict = batch_predict.to( res.device )
+			
+			res = torch.cat( (res, batch_predict) )
+			
+		return res
+		
 	
 	def add_train_status_iter(self, train_status):
 		
@@ -466,17 +517,12 @@ def save_train_status(model):
 	Save train status
 	"""
 	
-	db_con = open_model_db(
-		db_path = os.path.join( model.get_model_path(), "model.db" )
-	)
-	
-	
-	"""
-	Save train status info
-	"""
-	
 	if model.history["epoch_number"] > 0:
-	
+		
+		db_con = open_model_db(
+			db_path = os.path.join( model.get_model_path(), "model.db" )
+		)
+		
 		sql = """
 			insert or replace into history (
 				model_name, epoch_number, acc_train,
@@ -522,9 +568,9 @@ def save_train_status(model):
 		cur = db_con.cursor()
 		res = cur.execute(sql, obj)
 		cur.close()
-	
-	db_con.commit()
-	db_con.close()
+		
+		db_con.commit()
+		db_con.close()
 
 
 def load_train_status(model, epoch_number=None):
@@ -591,15 +637,27 @@ def save_model_file(model, epoch_number=None):
 	torch.save(model.module.state_dict(), file_path)
 
 
-def save_model(model):
+def save_optimizer_file(model, optimizer):
+	
+	epoch_number = model.history["epoch_number"]
+	file_path = os.path.join( model.get_model_path(), "model-" +
+		str(epoch_number) + "-optimizer.data" )
+	
+	make_parent_dir(file_path)
+	torch.save(optimizer.state_dict(), file_path)
+
+
+def save_model(model, optimizer=None):
 		
 	"""
 	Save model
 	"""
 	
 	save_model_file(model)
-	save_model_file(model, model.history["epoch_number"])
 	save_train_status(model)
+	
+	if save_epoch:
+		save_model_file(model, model.history["epoch_number"])
 
 
 def load_model(model, epoch_number=None):
@@ -612,7 +670,7 @@ def load_model(model, epoch_number=None):
 	
 	file_path = os.path.join( model.get_model_path(), "model.data" )
 	if epoch_number is not None:
-		file_path = os.path.join( model.get_model_path(), "model-" + epoch_number + ".data" )
+		file_path = os.path.join( model.get_model_path(), "model-" + str(epoch_number) + ".data" )
 	
 	try:
 		if os.path.isfile(file_path):
@@ -628,3 +686,16 @@ def load_model(model, epoch_number=None):
 	
 	return False
 
+
+def load_optimizer(model, optimizer):
+	
+	epoch_number = model.history["epoch_number"]
+	file_path = os.path.join( model.get_model_path(), "model-" +
+		str(epoch_number) + "-optimizer.data" )
+	
+	state_dict = None
+	if os.path.isfile(file_path):
+		state_dict = torch.load(file_path)
+	
+	if state_dict:
+		optimizer.load_state_dict(state_dict)
