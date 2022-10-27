@@ -279,25 +279,29 @@ class Model:
 	
 	def predict_dataset(self, dataset, batch_size=32, tensor_device=None):
 		
+		from torch.utils.data import DataLoader
+		
 		if tensor_device is None:
 			tensor_device = get_tensor_device()
 		
+		num_workers = os.cpu_count()
+		
 		loader = DataLoader(
-			self.test_dataset,
-			num_workers=self.num_workers,
-			batch_size=self.batch_size,
+			dataset,
+			num_workers=num_workers,
+			batch_size=batch_size,
 			drop_last=False,
 			shuffle=False
 		)
 		
 		res = torch.tensor([])
+		module = self.module.to(tensor_device)
 		
-		for batch_x, batch_y in self.loader:
+		for batch_x, _ in loader:
 			
 			batch_x = batch_x.to(tensor_device)
-			batch_y = batch_y.to(tensor_device)
 			
-			batch_x, batch_y = self.convert_batch(x=batch_x, y=batch_y)
+			batch_x, _ = self.convert_batch(x=batch_x)
 			
 			batch_predict = module(batch_x)
 			batch_predict = batch_predict.to( res.device )

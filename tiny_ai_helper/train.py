@@ -767,10 +767,10 @@ def do_train(model, *args, **kwargs):
 
 class FilesListDataset(Dataset):
 	
-	def __init__(self, files, folder_path="", transform=None, get_tensor_from_answer=None):
+	def __init__(self, files, files_path="", transform=None, get_tensor_from_answer=None):
 		
 		self.files = files
-		self.folder_path = folder_path
+		self.files_path = files_path
 		self.transform = transform
 		self.get_tensor_from_answer = get_tensor_from_answer
 	
@@ -778,19 +778,19 @@ class FilesListDataset(Dataset):
 	def __getitem__(self, index):
 		
 		file_path = ""
-		answer = None
+		answer = torch.tensor([])
 		
 		if self.get_tensor_from_answer is None:
 			file_path = self.files[index]
 		else:
 			file_path, answer = self.files[index]
 		
-		if self.folder_path != "":
-			file_path = os.path.join(self.folder_path, file_path)
+		if self.files_path != "":
+			file_path = os.path.join(self.files_path, file_path)
 		
 		tensor = self.transform(file_path)
 		
-		if self.get_tensor_from_answer is None:
+		if self.get_tensor_from_answer is not None:
 			answer = self.get_tensor_from_answer(answer)
 		
 		return ( tensor, answer )
