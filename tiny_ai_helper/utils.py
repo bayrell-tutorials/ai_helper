@@ -414,20 +414,3 @@ def get_tensor_device():
 	return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-
-def get_train_history(model):
-		
-	"""
-	Returns train history
-	"""
-	
-	fig, axs = plt.subplots(2)
-	axs[0].plot( np.multiply(model.history['loss_train'], 100), label='train loss')
-	axs[0].plot( np.multiply(model.history['loss_test'], 100), label='test loss')
-	axs[0].legend()
-	axs[1].plot( np.multiply(model.history['acc_train'], 100), label='train acc')
-	axs[1].plot( np.multiply(model.history['acc_test'], 100), label='test acc')
-	axs[1].legend()
-	plt.xlabel('Epoch')
-	
-	return plt

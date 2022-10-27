@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torchsummary import summary
-from .train import TrainStatus
+from .train import TrainStatus, TrainHistory
 from .layer import AbstractLayerFactory
 from .utils import *
 
@@ -21,23 +21,7 @@ class Model:
 	def __init__(self, *args, **kwargs):
 		
 		self.module = None
-		self.history = {
-			"epoch_number": 0,
-			"loss_train": [],
-			"loss_test": [],
-			"acc_train": [],
-			"acc_test": [],
-			"acc_rel": [],
-			"time": [],
-			"batch_train_iter": [],
-			"batch_test_iter": [],
-			"train_count_iter": [],
-			"test_count_iter": [],
-			"loss_train_iter": [],
-			"loss_test_iter": [],
-			"acc_train_iter": [],
-			"acc_test_iter": [],
-		}
+		self.history = TrainHistory()
 		
 		self.input_shape = kwargs["input_shape"] if "input_shape" in kwargs else (1)
 		self.output_shape = kwargs["output_shape"] if "output_shape" in kwargs else (1)
@@ -321,37 +305,7 @@ class Model:
 			res = torch.cat( (res, batch_predict) )
 			
 		return res
-		
 	
-	def add_train_status_iter(self, train_status):
-		
-		"""
-		Add train history from train status
-		"""
-		
-		loss_train = train_status.get_loss_train()
-		loss_test = train_status.get_loss_test()
-		acc_train = train_status.get_acc_train()
-		acc_test = train_status.get_acc_test()
-		acc_rel = train_status.get_acc_rel()
-		time = train_status.get_time()
-		
-		self.history["epoch_number"] = train_status.epoch_number
-		self.history["loss_train"].append(loss_train)
-		self.history["loss_test"].append(loss_test)
-		self.history["acc_train"].append(acc_train)
-		self.history["acc_test"].append(acc_test)
-		self.history["acc_rel"].append(acc_rel)
-		self.history["time"].append(time)
-		self.history["batch_train_iter"].append(train_status.batch_train_iter)
-		self.history["batch_test_iter"].append(train_status.batch_test_iter)
-		self.history["train_count_iter"].append(train_status.train_count_iter)
-		self.history["test_count_iter"].append(train_status.test_count_iter)
-		self.history["loss_train_iter"].append(train_status.loss_train_iter)
-		self.history["loss_test_iter"].append(train_status.loss_test_iter)
-		self.history["acc_train_iter"].append(train_status.acc_train_iter)
-		self.history["acc_test_iter"].append(train_status.acc_test_iter)
-		
 	
 	def save_train_history(self, show=False):
 		
@@ -359,7 +313,7 @@ class Model:
 		Save train history
 		"""
 		
-		plt = get_train_history(self)
+		plt = self.history.get_plot(self)
 		history_image = os.path.join( self.get_model_path(), "model.png" )
 		make_parent_dir(history_image)		
 		plt.savefig(history_image)
@@ -517,7 +471,10 @@ def save_train_status(model):
 	Save train status
 	"""
 	
-	if model.history["epoch_number"] > 0:
+	epoch_number = model.history.epoch_number
+	epoch_record = model.history.get_epoch(epoch_number)
+	
+	if epoch_number > 0 and epoch_record is not None:
 		
 		db_con = open_model_db(
 			db_path = os.path.join( model.get_model_path(), "model.db" )
@@ -547,21 +504,21 @@ def save_train_status(model):
 		history = model.history
 		obj = {
 			"model_name": model.model_name,
-			"epoch_number": history["epoch_number"],
-			"acc_train": history["acc_train"][-1],
-			"acc_test": history["acc_test"][-1],
-			"acc_rel": history["acc_rel"][-1],
-			"loss_train": history["loss_train"][-1],
-			"loss_test": history["loss_test"][-1],
-			"time": history["time"][-1],
-			"batch_train_iter": history["batch_train_iter"][-1],
-			"batch_test_iter": history["batch_test_iter"][-1],
-			"train_count_iter": history["train_count_iter"][-1],
-			"test_count_iter": history["test_count_iter"][-1],
-			"loss_train_iter": history["loss_train_iter"][-1],
-			"loss_test_iter": history["loss_test_iter"][-1],
-			"acc_train_iter": history["acc_train_iter"][-1],
-			"acc_test_iter": history["acc_test_iter"][-1],
+			"epoch_number": epoch_number,
+			"acc_train": epoch_record["acc_train"],
+			"acc_test": epoch_record["acc_test"],
+			"acc_rel": epoch_record["acc_rel"],
+			"loss_train": epoch_record["loss_train"],
+			"loss_test": epoch_record["loss_test"],
+			"time": epoch_record["time"],
+			"batch_train_iter": epoch_record["batch_train_iter"],
+			"batch_test_iter": epoch_record["batch_test_iter"],
+			"train_count_iter": epoch_record["train_count_iter"],
+			"test_count_iter": epoch_record["test_count_iter"],
+			"loss_train_iter": epoch_record["loss_train_iter"],
+			"loss_test_iter": epoch_record["loss_test_iter"],
+			"acc_train_iter": epoch_record["acc_train_iter"],
+			"acc_test_iter": epoch_record["acc_test_iter"],
 			"info": "{}",
 		}
 		
@@ -600,22 +557,7 @@ def load_train_status(model, epoch_number=None):
 			if record["epoch_number"] > epoch_number:
 				continue
 		
-		model.history["epoch_number"] = record["epoch_number"]
-		model.history["loss_train"].append( record["loss_train"] )
-		model.history["loss_test"].append( record["loss_test"] )
-		model.history["acc_train"].append( record["acc_train"] )
-		model.history["acc_test"].append( record["acc_test"] )
-		model.history["acc_rel"].append( record["acc_rel"] )
-		model.history["time"].append( record["time"] )
-		model.history["batch_train_iter"].append( record["batch_train_iter"] )
-		model.history["batch_test_iter"].append( record["batch_test_iter"] )
-		model.history["train_count_iter"].append( record["train_count_iter"] )
-		model.history["test_count_iter"].append( record["test_count_iter"] )
-		model.history["loss_train_iter"].append( record["loss_train_iter"] )
-		model.history["loss_test_iter"].append( record["loss_test_iter"] )
-		model.history["acc_train_iter"].append( record["acc_train_iter"] )
-		model.history["acc_test_iter"].append( record["acc_test_iter"] )
-	
+		model.history.add( record )
 	
 	cur.close()
 	
@@ -639,7 +581,7 @@ def save_model_file(model, epoch_number=None):
 
 def save_optimizer_file(model, optimizer):
 	
-	epoch_number = model.history["epoch_number"]
+	epoch_number = model.history.epoch_number
 	file_path = os.path.join( model.get_model_path(), "model-" +
 		str(epoch_number) + "-optimizer.data" )
 	
@@ -657,7 +599,7 @@ def save_model(model, optimizer=None):
 	save_train_status(model)
 	
 	if save_epoch:
-		save_model_file(model, model.history["epoch_number"])
+		save_model_file(model, model.history.epoch_number)
 
 
 def load_model(model, epoch_number=None):
@@ -689,7 +631,7 @@ def load_model(model, epoch_number=None):
 
 def load_optimizer(model, optimizer):
 	
-	epoch_number = model.history["epoch_number"]
+	epoch_number = model.history.epoch_number
 	file_path = os.path.join( model.get_model_path(), "model-" +
 		str(epoch_number) + "-optimizer.data" )
 	

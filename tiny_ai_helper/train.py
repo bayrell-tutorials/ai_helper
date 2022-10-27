@@ -7,8 +7,131 @@
 
 import os, time, torch
 from torch.utils.data import TensorDataset, DataLoader, Dataset
-from .utils import get_tensor_device
+from .utils import get_tensor_device, list_files, indexOf
 
+
+class TrainHistory:
+	
+	def __init__(self):
+		
+		self.epoch_number = 0
+		self.epoch = {}
+	
+	
+	def add(self, record):
+		
+		"""
+		Add train history from record
+		"""
+		
+		epoch_number = record["epoch_number"]
+		self.epoch_number = epoch_number
+		self.epoch[epoch_number] = {
+			
+			"loss_train": record["loss_train"],
+			"loss_test": record["loss_test"],
+			"acc_train": record["acc_train"],
+			"acc_test": record["acc_test"],
+			"acc_rel": record["acc_rel"],
+			"time": record["time"],
+			"batch_train_iter": record["batch_train_iter"],
+			"batch_test_iter": record["batch_test_iter"],
+			"train_count_iter": record["train_count_iter"],
+			"test_count_iter": record["test_count_iter"],
+			"loss_train_iter": record["loss_train_iter"],
+			"loss_test_iter": record["loss_test_iter"],
+			"acc_train_iter": record["acc_train_iter"],
+			"acc_test_iter": record["acc_test_iter"],
+			
+		}
+	
+	
+	def add_train_status(self, train_status):
+		
+		"""
+		Add train history from train status
+		"""
+		
+		loss_train = train_status.get_loss_train()
+		loss_test = train_status.get_loss_test()
+		acc_train = train_status.get_acc_train()
+		acc_test = train_status.get_acc_test()
+		acc_rel = train_status.get_acc_rel()
+		time = train_status.get_time()
+		
+		self.add( {
+			
+			"epoch_number": train_status.epoch_number,
+			"loss_train": loss_train,
+			"loss_test": loss_test,
+			"acc_train": acc_train,
+			"acc_test": acc_test,
+			"acc_rel": acc_rel,
+			"time": time,
+			"batch_train_iter": train_status.batch_train_iter,
+			"batch_test_iter": train_status.batch_test_iter,
+			"train_count_iter": train_status.train_count_iter,
+			"test_count_iter": train_status.test_count_iter,
+			"loss_train_iter": train_status.loss_train_iter,
+			"loss_test_iter": train_status.loss_test_iter,
+			"acc_train_iter": train_status.acc_train_iter,
+			"acc_test_iter": train_status.acc_test_iter,
+			
+		} )
+	
+	
+	def get_epoch(self, epoch_number):
+		
+		"""
+		Returns epoch by number
+		"""
+		
+		if not hasattr(self.epoch, epoch_number):
+			return None
+			
+		return self.epoch[epoch_number]
+	
+	
+	def get_metrics(self, metric_name, with_index=False):
+		
+		"""
+		Returns metrics by name
+		"""
+		
+		res = []
+		
+		for index in self.epoch:
+			
+			if with_index:
+				res.append( (index, self.epoch[index][metric_name]) )
+			else:
+				res.append( self.epoch[index][metric_name] )
+		
+		return res
+		
+	
+	def get_plot(self):
+		
+		"""
+		Returns train history
+		"""
+		
+		loss_train = self.get_metrics("loss_train")
+		loss_test = self.get_metrics("loss_test")
+		acc_train = self.get_metrics("acc_train")
+		acc_test = self.get_metrics("acc_test")
+		
+		fig, axs = plt.subplots(2)
+		axs[0].plot( np.multiply(loss_train, 100), label='train loss')
+		axs[0].plot( np.multiply(loss_test, 100), label='test loss')
+		axs[0].legend()
+		axs[1].plot( np.multiply(acc_train, 100), label='train acc')
+		axs[1].plot( np.multiply(acc_test, 100), label='test acc')
+		axs[1].legend()
+		plt.xlabel('Epoch')
+		
+		return plt
+	
 
 class TrainStatus:
 	
@@ -106,11 +229,11 @@ class TrainStatus:
 class TrainVerboseCallback:
 	
 	
-	def on_end_batch_train(self, train_status:TrainStatus):
+	def on_end_batch_train(self, trainer):
 		
-		acc_train = train_status.get_acc_train()
-		loss_train = train_status.get_loss_train()
-		time = train_status.get_time()
+		acc_train = trainer.train_status.get_acc_train()
+		loss_train = trainer.train_status.get_loss_train()
+		time = trainer.train_status.get_time()
 		
 		msg = ("\rStep {epoch_number}, {iter_value}%" +
 			", acc: .{acc}, loss: .{loss}, time: {time}s"
@@ -125,18 +248,18 @@ class TrainVerboseCallback:
 		print (msg, end='')
 	
 	
-	def on_end_epoch(self, train_status:TrainStatus):
+	def on_end_epoch(self, trainer):
 		
 		"""
 		Epoch
 		"""
 		
-		loss_train = train_status.get_loss_train()
-		loss_test = train_status.get_loss_test()
-		acc_train = train_status.get_acc_train()
-		acc_test = train_status.get_acc_test()
-		acc_rel = train_status.get_acc_rel()
-		time = train_status.get_time()
+		loss_train = trainer.train_status.get_loss_train()
+		loss_test = trainer.train_status.get_loss_test()
+		acc_train = trainer.train_status.get_acc_train()
+		acc_test = trainer.train_status.get_acc_test()
+		acc_rel = trainer.train_status.get_acc_rel()
+		time = trainer.train_status.get_time()
 		
 		print ("\r", end='')
 		
@@ -159,6 +282,124 @@ class TrainVerboseCallback:
 		
 		print (msg)
 	
+	
+class TrainSaveCallback:
+	
+	
+	def detect_type(self, file_name):
+	
+		import re
+		
+		file_type = ""
+		epoch_index = 0
+		
+		result = re.match(r'^model-(?P<id>[0-9]+)-optimizer\.data$', file_name)
+		if result:
+			return "optimizer", int(result.group("id"))
+		
+		result = re.match(r'^model-(?P<id>[0-9]+)\.data$', file_name)
+		if result:
+			return "model", int(result.group("id"))
+		
+		return file_type, epoch_index
+	
+	
+	def save_epoch_indexes(self, model, epoch_indexes):
+		
+		"""
+		Save epoch by indexes
+		"""
+		
+		model_path = model.get_model_path()
+		files = list_files( model_path )
+		
+		for file_name in files:
+			
+			file_type, epoch_index = self.detect_type(file_name)
+			if file_type in ["model", "optimizer"] and not (epoch_index in epoch_indexes):
+				
+				file_path = os.path.join( model_path, file_name )
+				os.unlink(file_path)
+				
+				print ("File " + file_name + " is deleted")
+				
+	
+	
+	def get_the_best_epoch(self, model, epoch_count=5, indexes=False):
+		
+		"""
+		Returns teh best epoch
+		"""
+		
+		acc_test = model.history.get_metrics("acc_test", with_index=True)
+		
+		def get_key(item):
+			return item[1]
+
+		acc_test.sort(key=get_key, reverse=True)
+		
+		res = []
+		res_count = 0
+		acc_test_len = len(acc_test)
+		acc_test_last = 1000
+		for index in range(acc_test_len):
+			
+			res.append( acc_test[index] )
+			
+			if acc_test_last != acc_test[index][1]:
+				res_count = res_count + 1
+			
+			acc_test_last = acc_test[index][1]
+			
+			if res_count > epoch_count:
+				break
+		
+		if not indexes:
+			return res
+			
+		res_indexes = []
+		for index in range(len(res)):
+			res_indexes.append( res[index][0] )
+			
+		return res_indexes
+	
+	
+	def save_the_best_epoch(self, model, epoch_count=5):
+		
+		"""
+		Save the best models
+		"""
+		
+		if model.history.epoch_number > 0 and epoch_count > 0:
+			
+			epoch_indexes = self.get_the_best_epoch(model, epoch_count, indexes=True)
+			epoch_indexes.append( model.history.epoch_number )
+			
+			self.save_epoch_indexes(model, epoch_indexes)
+	
+	
+	def on_end_epoch(self, trainer):
+		
+		"""
+		On epoch end
+		"""
+		
+		trainer.model.save(
+			save_epoch=trainer.save_epoch
+		)
+		
+		if trainer.save_epoch:
+			trainer.model.save_optimizer(trainer.optimizer)
+		
+		"""
+		Save best epoch
+		"""
+		self.save_the_best_epoch(
+			trainer.model,
+			epoch_count=trainer.save_epoch_count
+		)
+		
+		
 
 class Trainer:
 	
@@ -193,6 +434,7 @@ class Trainer:
 		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
 		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else True
+		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
 		
 		self._check_is_trained = kwargs["check_is_trained"] \
 			if "check_is_trained" in kwargs else None
@@ -201,7 +443,8 @@ class Trainer:
 			self.callbacks = kwargs["callbacks"]
 		else:
 			self.callbacks = [
-				TrainVerboseCallback()
+				TrainVerboseCallback(),
+				TrainSaveCallback(),
 			]
 		
 	
@@ -314,13 +557,7 @@ class Trainer:
 		if self._is_trained:
 			self.stop_training()
 		
-		self.model.add_train_status_iter(self.train_status)
-		self.model.save(
-			save_epoch=self.save_epoch
-		)
-		
-		if self.save_epoch:
-			self.model.save_optimizer(self.optimizer)
+		self.model.history.add_train_status(self.train_status)
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_epoch"):
