@@ -99,11 +99,15 @@ class TrainHistory:
 		"""
 		
 		res = []
-		
 		for index in self.epoch:
-			
 			if with_index:
-				res.append( (index, self.epoch[index][metric_name]) )
+				if isinstance(metric_name, list):
+					res2 = [ index ]
+					for name in metric_name:
+						res2.append( self.epoch[index][name] )
+					res.append( tuple(res2) )
+				else:
+					res.append( (index, self.epoch[index][metric_name]) )
 			else:
 				res.append( self.epoch[index][metric_name] )
 		
@@ -334,25 +338,25 @@ class TrainSaveCallback:
 		Returns teh best epoch
 		"""
 		
-		acc_test = model.history.get_metrics("acc_test", with_index=True)
+		metrics = model.history.get_metrics(["loss_test", "acc_rel"], with_index=True)
 		
 		def get_key(item):
-			return item[1]
+			return [item[1], item[2]]
 
-		acc_test.sort(key=get_key, reverse=True)
+		metrics.sort(key=get_key)
 		
 		res = []
 		res_count = 0
-		acc_test_len = len(acc_test)
-		acc_test_last = 1000
-		for index in range(acc_test_len):
+		metrics_len = len(metrics)
+		loss_test_last = 100
+		for index in range(metrics_len):
 			
-			res.append( acc_test[index] )
+			res.append( metrics[index] )
 			
-			if acc_test_last != acc_test[index][1]:
+			if loss_test_last != metrics[index][1]:
 				res_count = res_count + 1
 			
-			acc_test_last = acc_test[index][1]
+			loss_test_last = metrics[index][1]
 			
 			if res_count > epoch_count:
 				break
