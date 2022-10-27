@@ -326,8 +326,6 @@ class TrainSaveCallback:
 				file_path = os.path.join( model_path, file_name )
 				os.unlink(file_path)
 				
-				print ("File " + file_name + " is deleted")
-				
 	
 	
 	def get_the_best_epoch(self, model, epoch_count=5, indexes=False):
@@ -421,7 +419,6 @@ class Trainer:
 		self.train_dataset = None
 		self.test_dataset = None
 		self.batch_size = 64
-		self.lr = 1e-3
 		
 		self.optimizer = None
 		self.loss = None
@@ -434,6 +431,7 @@ class Trainer:
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 1.5
 		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.001
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
+		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
 		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
