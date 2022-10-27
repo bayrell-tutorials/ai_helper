@@ -313,7 +313,7 @@ class Model:
 		Save train history
 		"""
 		
-		plt = self.history.get_plot(self)
+		plt = self.history.get_plot()
 		history_image = os.path.join( self.get_model_path(), "model.png" )
 		make_parent_dir(history_image)		
 		plt.savefig(history_image)
@@ -589,7 +589,7 @@ def save_optimizer_file(model, optimizer):
 	torch.save(optimizer.state_dict(), file_path)
 
 
-def save_model(model, optimizer=None):
+def save_model(model, save_epoch=False):
 		
 	"""
 	Save model

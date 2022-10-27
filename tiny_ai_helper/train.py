@@ -86,7 +86,7 @@ class TrainHistory:
 		Returns epoch by number
 		"""
 		
-		if not hasattr(self.epoch, epoch_number):
+		if not(epoch_number in self.epoch):
 			return None
 			
 		return self.epoch[epoch_number]
@@ -115,6 +115,9 @@ class TrainHistory:
 		"""
 		Returns train history
 		"""
+		
+		import matplotlib.pyplot as plt
+		import numpy as np
 		
 		loss_train = self.get_metrics("loss_train")
 		loss_test = self.get_metrics("loss_test")
@@ -156,18 +159,20 @@ class TrainStatus:
 		
 		self.clear()
 		self.model = model
-		self.epoch_number = model.history["epoch_number"]
+		self.epoch_number = model.history.epoch_number
 		
 		if self.epoch_number > 0:
 			
-			self.batch_train_iter = model.history["batch_train_iter"][-1]
-			self.batch_test_iter = model.history["batch_test_iter"][-1]
-			self.train_count_iter = model.history["train_count_iter"][-1]
-			self.test_count_iter = model.history["test_count_iter"][-1]
-			self.loss_train_iter = model.history["loss_train_iter"][-1]
-			self.loss_test_iter = model.history["loss_test_iter"][-1]
-			self.acc_train_iter = model.history["acc_train_iter"][-1]
-			self.acc_test_iter = model.history["acc_test_iter"][-1]
+			record = model.history.get_epoch(self.epoch_number)
+			
+			self.batch_train_iter = record["batch_train_iter"]
+			self.batch_test_iter = record["batch_test_iter"]
+			self.train_count_iter = record["train_count_iter"]
+			self.test_count_iter = record["test_count_iter"]
+			self.loss_train_iter = record["loss_train_iter"]
+			self.loss_test_iter = record["loss_test_iter"]
+			self.acc_train_iter = record["acc_train_iter"]
+			self.acc_test_iter = record["acc_test_iter"]
 	
 	def clear(self):
 		self.clear_iter()
@@ -238,8 +243,8 @@ class TrainVerboseCallback:
 		msg = ("\rStep {epoch_number}, {iter_value}%" +
 			", acc: .{acc}, loss: .{loss}, time: {time}s"
 		).format(
-			epoch_number = train_status.epoch_number,
-			iter_value = round(train_status.get_iter_value() * 100),
+			epoch_number = trainer.train_status.epoch_number,
+			iter_value = round(trainer.train_status.get_iter_value() * 100),
 			loss = str(round(loss_train * 10000)).zfill(4),
 			acc = str(round(acc_train * 100)).zfill(2),
 			time = str(round(time)),
@@ -271,12 +276,12 @@ class TrainVerboseCallback:
 			"loss_test: .{loss_test}, " +
 			"time: {time}s, "
 		).format(
-			epoch_number = train_status.epoch_number,
+			epoch_number = trainer.train_status.epoch_number,
 			loss_train = str(round(loss_train * 10000)).zfill(4),
 			loss_test = str(round(loss_test * 10000)).zfill(4),
 			acc_train = str(round(acc_train * 100)).zfill(2),
 			acc_test = str(round(acc_test * 100)).zfill(2),
-			acc_rel = str(round(acc_rel * 100)).zfill(2),
+			acc_rel = str(round(acc_rel * 100) / 100),
 			time = str(round(time)),
 		)
 		
@@ -390,14 +395,14 @@ class TrainSaveCallback:
 		
 		if trainer.save_epoch:
 			trainer.model.save_optimizer(trainer.optimizer)
-		
-		"""
-		Save best epoch
-		"""
-		self.save_the_best_epoch(
-			trainer.model,
-			epoch_count=trainer.save_epoch_count
-		)
+			
+			"""
+			Save best epoch
+			"""
+			self.save_the_best_epoch(
+				trainer.model,
+				epoch_count=trainer.save_epoch_count
+			)
 		
 		
 
