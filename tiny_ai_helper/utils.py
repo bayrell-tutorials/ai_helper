@@ -215,41 +215,6 @@ def show_image_in_plot(image, cmap=None, is_float=False, first_channel=True):
 	plt.show()
 	
 
-def get_vector_from_answer(count):
-	
-	"""
-	Returns vector from answer\n
-		1 -> [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]\n
-		5 -> [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-	"""
-	
-	def f(number):
-		res = [0.0] * count
-		
-		if (number >=0 and number < count):
-			res[number] = 1.0
-			
-		return res
-		
-	return f
-
-
-def get_answer_from_vector(vector):
-	
-	"""
-	Returns answer from vector
-	"""
-	
-	value_max = -math.inf
-	value_index = 0
-	for i in range(0, len(vector)):
-		value = vector[i]
-		if value_max < value:
-			value_index = i
-			value_max = value
-	
-	return value_index
-	
 	
 def list_files(path="", recursive=True):
 	
@@ -414,3 +379,14 @@ def get_tensor_device():
 	return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
+def load_pth_file(cached_file, map_location = None):
+	
+	model_dir = cached_file + "_dir"
+	state_dict = None
+	
+	if torch.hub._is_legacy_zip_format(cached_file):
+		state_dict = torch.hub._legacy_zip_load(cached_file, model_dir, map_location)
+	else:
+		state_dict = torch.load(cached_file, map_location=map_location)
+
+	return state_dict

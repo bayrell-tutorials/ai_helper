@@ -15,33 +15,72 @@ from .layer import AbstractLayerFactory
 from .utils import *
 
 
-class Model:
+class Model(torch.nn.Module):
 	
 	
 	def __init__(self, *args, **kwargs):
 		
-		self.module = None
-		self.history = TrainHistory()
+		torch.nn.Module.__init__(self)
 		
-		self.input_shape = kwargs["input_shape"] if "input_shape" in kwargs else (1)
-		self.output_shape = kwargs["output_shape"] if "output_shape" in kwargs else (1)
+		if not hasattr(self, "_history"):
+			self._history = TrainHistory()
 		
-		self.onnx_path = kwargs["onnx_path"] \
-			if "onnx_path" in kwargs else os.path.join(os.getcwd(), "web")
-		self.onnx_opset_version = kwargs["onnx_opset_version"] \
-			if "onnx_opset_version" in kwargs else 9
-		self.model_name = kwargs["model_name"] if "model_name" in kwargs else ""
+		if not hasattr(self, "_input_shape"):
+			self._input_shape = (1)
 		
-		self.model_path = kwargs["model_path"] \
-			if "model_path" in kwargs else os.path.join(os.getcwd(), "data", "model", self.model_name)
+		if not hasattr(self, "_output_shape"):
+			self._output_shape = (1)
 		
-		self._is_debug = kwargs["debug"] if "debug" in kwargs else False
-		self._convert_batch = kwargs["convert_batch"] if "convert_batch" in kwargs else None
+		if not hasattr(self, "_onnx_path"):
+			self._onnx_path = os.path.join(os.getcwd(), "web")
 		
-		self._layers = kwargs["layers"] if "layers" in kwargs else None
-		self.create_model()
+		if not hasattr(self, "_onnx_opset_version"):
+			self._onnx_opset_version = 9
 		
+		if not hasattr(self, "_model_name"):
+			self._model_name = ""
 		
+		if not hasattr(self, "_model_path"):
+			self._model_path = ""
+		
+		if not hasattr(self, "_repository_path"):
+			self._repository_path = ""
+		
+		if not hasattr(self, "_is_debug"):
+			self._is_debug = False
+		
+		if not hasattr(self, "_convert_batch"):
+			self._convert_batch = None
+		
+		if "input_shape" in kwargs:
+			self._input_shape = kwargs["input_shape"]
+		
+		if "output_shape" in kwargs:
+			self._input_shape = kwargs["output_shape"]
+		
+		if "onnx_path" in kwargs:
+			self._onnx_path = kwargs["onnx_path"]
+		
+		if "onnx_opset_version" in kwargs:
+			self._onnx_opset_version = kwargs["onnx_opset_version"]
+		
+		if "model_name" in kwargs:
+			self._model_name = kwargs["model_name"]
+		
+		if "repository_path" in kwargs:
+			self.set_repository_path(kwargs["repository_path"])
+			self._repository_path = kwargs["repository_path"]
+		
+		if "model_path" in kwargs:
+			self.set_model_path(kwargs["model_path"])
+		
+		if "debug" in kwargs:
+			self._is_debug = kwargs["debug"]
+		
+		if "convert_batch" in kwargs:
+			self._convert_batch = kwargs["convert_batch"]
+	
+	
 	def is_debug(self, value):
 		
 		"""
@@ -49,7 +88,7 @@ class Model:
 		"""
 		
 		self._is_debug = value
-		
+	
 	
 	def get_model_name(self):
 		
@@ -57,7 +96,7 @@ class Model:
 		Returns model name
 		"""
 		
-		return self.model_name
+		return self._model_name
 	
 	
 	def get_onnx_path(self):
@@ -66,7 +105,7 @@ class Model:
 		Returns model onnx path
 		"""
 		
-		return os.path.join(self.onnx_path, self.model_name + ".onnx")
+		return os.path.join(self._onnx_path, self._model_name + ".onnx")
 	
 	
 	def get_model_path(self):
@@ -75,7 +114,34 @@ class Model:
 		Returns model folder path
 		"""
 		
-		return self.model_path
+		return self._model_path
+	
+	
+	def get_model_file_path(self, epoch_number=None):
+		
+		"""
+		Returns model file path
+		"""
+		
+		file_path = os.path.join( self.get_model_path(), "model.data" )
+		
+		if epoch_number is not None:
+			file_path = os.path.join( self.get_model_path(), "model-" + str(epoch_number) + ".data" )
+		
+		return file_path
+	
+	
+	def get_optimizer_file_path(self, epoch_number=None):
+		
+		"""
+		Returns optimizer file_path
+		"""
+		
+		epoch_number = self._history.epoch_number
+		file_path = os.path.join( self.get_model_path(), "model-" +
+			str(epoch_number) + "-optimizer.data" )
+		
+		return file_path
 	
 	
 	def set_model_path(self, path):
@@ -84,7 +150,16 @@ class Model:
 		Set model folder path
 		"""
 		
-		self.model_path = path
+		self._model_path = path
+	
+	
+	def set_repository_path(self, repository_path):
+		
+		"""
+		Set repository path
+		"""
+		
+		self.set_model_path( os.path.join(repository_path, self._model_name) )
 	
 	
 	def convert_batch(self, x=None, y=None):
@@ -125,136 +200,27 @@ class Model:
 		Show model summary
 		"""
 		
-		print ("Model name: " + self.model_name)
+		print ("Model name: " + self._model_name)
 		
 		if tensor_device is None:
 			tensor_device = get_tensor_device()
 		
-		module = self.module.to(tensor_device)
-		summary(self.module, tuple(self.input_shape), device=str(tensor_device))
-		
-		if (verbose and isinstance(self.module, ExtendModule)):
-			for arr in self.module._shapes:
-				print ( arr[0] + " => " + str(tuple(arr[1])) )
+		model = self.to(tensor_device)
+		summary(model, tuple(self._input_shape), device=str(tensor_device))
 	
 	
-	def save(self, optimizer=None, save_epoch=False):
-		
-		"""
-		Save model to file
-		"""
-		
-		save_model(self, save_epoch=save_epoch)
-	
-	
-	def save_optimizer(self, optimizer):
-		
-		"""
-		Save optimizer to file
-		"""
-		
-		save_optimizer_file(self, optimizer)
-	
-	
-	def save_onnx(self, tensor_device=None):
-		
-		"""
-		Save model to onnx file
-		"""
-		
-		import torch, torch.onnx
-		
-		if tensor_device is None:
-			tensor_device = get_tensor_device()
-		
-		onnx_model_path = self.get_onnx_path()
-		
-		# Prepare data input
-		data_input = torch.zeros(self.input_shape).to(torch.float32)
-		data_input = data_input[None,:]
-		
-		# Move to tensor device
-		model = self.module.to(tensor_device)
-		data_input = data_input.to(tensor_device)
-		
-		torch.onnx.export(
-			model,
-			data_input,
-			onnx_model_path,
-			opset_version = self.onnx_opset_version,
-			input_names = ['input'],
-			output_names = ['output'],
-			verbose=False
-		)
-	
-	
-	def load(self, folder_path=None, repository_path=None, epoch_number=None):
-		
-		"""
-		Load model from file
-		"""
-		
-		if folder_path is not None:
-			self.set_model_path(folder_path)
-		
-		if repository_path is not None:
-			self.set_model_path( os.path.join(repository_path, self.model_name) )
-		
-		load_model(self, epoch_number=epoch_number)
-	
-	
-	def load_optimizer(self, optimizer):
-		
-		"""
-		Load optimizer
-		"""
-		
-		load_optimizer(self, optimizer)
-	
-	
-	def check_answer(self, **kwargs):
-		
-		"""
-		Check answer
-		"""
-		
-		tensor_y = kwargs["tensor_y"]
-		tensor_predict = kwargs["tensor_predict"]
-		
-		y = get_answer_from_vector(tensor_y)
-		predict = get_answer_from_vector(tensor_predict)
-		
-		return predict == y
-		
-		
 	def check_answer_batch(self, **kwargs):
 		
 		"""
 		Check batch. Returns count right answers
 		"""
 		
-		res = 0
-		
-		type = kwargs["type"]
-		batch_x = kwargs["batch_x"]
 		batch_y = kwargs["batch_y"]
 		batch_predict = kwargs["batch_predict"]
 		
-		for i in range(batch_x.shape[0]):
-			
-			tensor_x = batch_x[i]
-			tensor_y = batch_y[i]
-			tensor_predict = batch_predict[i]
-			
-			flag = self.check_answer(
-				tensor_x=tensor_x,
-				tensor_y=tensor_y,
-				tensor_predict=tensor_predict,
-				type=type,
-			)
-			
-			if flag:
-				res = res + 1
+		batch_y = torch.argmax(batch_y, dim=1)
+		batch_predict = torch.argmax(batch_predict, dim=1)
+		res = torch.sum( torch.eq(batch_y, batch_predict) ).item()
 		
 		return res
 	
@@ -317,9 +283,9 @@ class Model:
 		Save train history
 		"""
 		
-		plt = self.history.get_plot()
+		plt = self._history.get_plot()
 		history_image = os.path.join( self.get_model_path(), "model.png" )
-		make_parent_dir(history_image)		
+		make_parent_dir(history_image)
 		plt.savefig(history_image)
 		
 		if show:
@@ -328,6 +294,306 @@ class Model:
 		return plt
 	
 	
+	def open_model_db(self, db_path):
+		
+		"""
+		Open database
+		"""
+		
+		is_create = False
+		
+		make_parent_dir(db_path)
+		
+		if not os.path.exists(db_path):
+			is_create = True
+		
+		db_con = sqlite3.connect( db_path, isolation_level=None )
+		db_con.row_factory = sqlite3.Row
+		
+		cur = db_con.cursor()
+		res = cur.execute("PRAGMA journal_mode = WAL;")
+		cur.close()
+		
+		if is_create:
+			self.create_model_db(db_con)
+			
+		return db_con
+	
+	
+	def create_model_db(self, db_con):
+		
+		"""
+		Create database
+		"""
+		
+		cur = db_con.cursor()
+		
+		sql = """CREATE TABLE history(
+			model_name text NOT NULL,
+			epoch_number integer NOT NULL,
+			time real NOT NULL,
+			acc_train real NOT NULL,
+			acc_test real NOT NULL,
+			acc_rel real NOT NULL,
+			loss_train real NOT NULL,
+			loss_test real NOT NULL,
+			batch_train_iter integer NOT NULL,
+			batch_test_iter integer NOT NULL,
+			train_count_iter integer NOT NULL,
+			test_count_iter integer NOT NULL,
+			loss_train_iter real NOT NULL,
+			loss_test_iter real NOT NULL,
+			acc_train_iter real NOT NULL,
+			acc_test_iter real NOT NULL,
+			info text NOT NULL,
+			PRIMARY KEY ("model_name", "epoch_number")
+		)"""
+		cur.execute(sql)
+		
+		cur.close()
+		
+		
+	def save_train_status(self):
+			
+		"""
+		Save train status
+		"""
+		
+		epoch_number = self._history.epoch_number
+		epoch_record = self._history.get_epoch(epoch_number)
+		
+		if epoch_number > 0 and epoch_record is not None:
+			
+			db_path = os.path.join( self.get_model_path(), "model.db" )
+			db_con = self.open_model_db(
+				db_path = db_path
+			)
+			
+			sql = """
+				insert or replace into history (
+					model_name, epoch_number, acc_train,
+					acc_test, acc_rel, loss_train, loss_test,
+					batch_train_iter, batch_test_iter,
+					train_count_iter, test_count_iter,
+					loss_train_iter, loss_test_iter,
+					acc_train_iter, acc_test_iter,
+					time, info
+				) values
+				(
+					:model_name, :epoch_number, :acc_train,
+					:acc_test, :acc_rel, :loss_train, :loss_test,
+					:batch_train_iter, :batch_test_iter,
+					:train_count_iter, :test_count_iter,
+					:loss_train_iter, :loss_test_iter,
+					:acc_train_iter, :acc_test_iter,
+					:time, :info
+				)
+			"""
+			
+			history = self._history
+			obj = {
+				"model_name": self._model_name,
+				"epoch_number": epoch_number,
+				"acc_train": epoch_record["acc_train"],
+				"acc_test": epoch_record["acc_test"],
+				"acc_rel": epoch_record["acc_rel"],
+				"loss_train": epoch_record["loss_train"],
+				"loss_test": epoch_record["loss_test"],
+				"time": epoch_record["time"],
+				"batch_train_iter": epoch_record["batch_train_iter"],
+				"batch_test_iter": epoch_record["batch_test_iter"],
+				"train_count_iter": epoch_record["train_count_iter"],
+				"test_count_iter": epoch_record["test_count_iter"],
+				"loss_train_iter": epoch_record["loss_train_iter"],
+				"loss_test_iter": epoch_record["loss_test_iter"],
+				"acc_train_iter": epoch_record["acc_train_iter"],
+				"acc_test_iter": epoch_record["acc_test_iter"],
+				"info": "{}",
+			}
+			
+			cur = db_con.cursor()
+			res = cur.execute(sql, obj)
+			cur.close()
+			
+			db_con.commit()
+			db_con.close()
+
+
+	def load_train_status(self, epoch_number=None):
+			
+		"""
+		Load train status
+		"""
+		
+		db_path = os.path.join( self.get_model_path(), "model.db" )
+		db_con = self.open_model_db(
+			db_path = db_path
+		)
+		
+		sql = """
+			select * from "history"
+			where model_name=:model_name
+			order by epoch_number asc
+		"""
+		
+		cur = db_con.cursor()
+		res = cur.execute(sql, {"model_name": self._model_name})
+		
+		records = res.fetchall()
+		
+		for record in records:
+			
+			if epoch_number is not None:
+				if record["epoch_number"] > epoch_number:
+					continue
+			
+			self._history.add( record )
+		
+		cur.close()
+		
+		db_con.commit()
+		db_con.close()
+
+
+	def save_model_file(self, file_path):
+			
+		"""
+		Save model to file
+		"""
+		
+		state_dict = self.state_dict()
+		make_parent_dir(file_path)
+		torch.save(state_dict, file_path)
+	
+	
+	def save(self, save_epoch=False):
+		
+		"""
+		Save model
+		"""
+		
+		file_path = self.get_model_file_path()
+		self.save_model_file(file_path)
+		
+		if save_epoch:
+			epoch_number = self._history.epoch_number
+			file_path = self.get_model_file_path(epoch_number)
+			self.save_model_file(file_path)
+		
+		self.save_train_status()
+
+	
+	def save_onnx(self, tensor_device=None):
+		
+		"""
+		Save model to onnx file
+		"""
+		
+		import torch, torch.onnx
+		
+		if tensor_device is None:
+			tensor_device = get_tensor_device()
+		
+		onnx_model_path = self.get_onnx_path()
+		
+		# Prepare data input
+		data_input = torch.zeros(self.input_shape).to(torch.float32)
+		data_input = data_input[None,:]
+		
+		# Move to tensor device
+		model = self.to(tensor_device)
+		data_input = data_input.to(tensor_device)
+		
+		torch.onnx.export(
+			model,
+			data_input,
+			onnx_model_path,
+			opset_version = self.onnx_opset_version,
+			input_names = ['input'],
+			output_names = ['output'],
+			verbose=False
+		)
+	
+	
+	def load_model_file(self, file_path):
+			
+		"""
+		Load model
+		"""
+		
+		state_dict = None
+		
+		try:
+			if os.path.isfile(file_path):
+				state_dict = torch.load(file_path)
+		
+		except:
+			pass
+		
+		if state_dict:
+			self.load_state_dict(state_dict)
+			return True
+		
+		return False
+	
+	
+	def load(self, model_path=None, repository_path=None, file_path=None, epoch_number=None):
+		
+		"""
+		Load model from file
+		"""
+		
+		if repository_path is not None:
+			self.set_repository_path(repository_path)
+		
+		if model_path is not None:
+			self.set_model_path(model_path)
+		
+		if file_path is None:
+			file_path = self.get_model_file_path(epoch_number)
+		
+		is_loaded = self.load_model_file(file_path)
+		
+		if is_loaded:
+			self.load_train_status(epoch_number)
+	
+	
+	def save_optimizer(self, optimizer, file_path=None):
+		
+		"""
+		Save optimizer
+		"""
+		
+		if file_path is None:
+			epoch_number = self._history.epoch_number
+			file_path = self.get_optimizer_file_path(epoch_number)
+		
+		make_parent_dir(file_path)
+		torch.save(optimizer.state_dict(), file_path)
+	
+
+	def load_optimizer(self, optimizer, file_path=None):
+		
+		"""
+		Load optimizer
+		"""
+		
+		if file_path is None:
+			epoch_number = self._history.epoch_number
+			file_path = self.get_optimizer_file_path(epoch_number)
+		
+		state_dict = None
+		if os.path.isfile(file_path):
+			try:
+				if os.path.isfile(file_path):
+					state_dict = torch.load(file_path)
+			except:
+				pass
+		
+		if state_dict:
+			optimizer.load_state_dict(state_dict)
+
+
 class ExtendModule(torch.nn.Module):
 	
 	def __init__(self, model):
@@ -338,10 +604,14 @@ class ExtendModule(torch.nn.Module):
 		
 		super(ExtendModule, self).__init__()
 		
-		self._model = model
 		self._layers = []
 		self._shapes = []
-		self._saves = {}
+		self._input_shape = kwargs["input_shape"] if "input_shape" in kwargs else (1)
+		self._output_shape = kwargs["output_shape"] if "output_shape" in kwargs else (1)
+		self._layers = kwargs["layers"] if "layers" in kwargs else None
+		
+		if self._layers is not None:
+			self.init_layers(self._layers)
 		
 	
 	def forward(self, x):
@@ -353,11 +623,11 @@ class ExtendModule(torch.nn.Module):
 		for index, obj in enumerate(self._layers):
 			
 			if isinstance(obj, AbstractLayerFactory):
-				
-				layer_factory: AbstractLayerFactory = obj
-				x = layer_factory.forward(x)
-				
-				
+				x = obj.forward(x)
+			
+			elif isinstance(obj, torch.nn.Module):
+				x = obj.forward(x)
+		
 		return x
 	
 	
@@ -369,8 +639,8 @@ class ExtendModule(torch.nn.Module):
 		
 		self._layers = layers
 		
-		input_shape = self._model.input_shape
-		output_shape = self._model.output_shape
+		input_shape = self.input_shape
+		output_shape = self.output_shape
 		
 		arr = list(input_shape)
 		arr.insert(0, 1)
@@ -379,7 +649,6 @@ class ExtendModule(torch.nn.Module):
 		self._shapes.append( ("Input", vector_x.shape) )
 		
 		if debug:
-			print ("Debug model " + str(self._model.model_name))
 			print ("Input:" + " " + str( tuple(vector_x.shape) ))
 		
 		index = 1
@@ -408,240 +677,8 @@ class ExtendModule(torch.nn.Module):
 					self.add_module(layer_name, layer)
 					
 				index = index + 1
-
-
-def open_model_db(db_path):
-		
-	"""
-	Open database
-	"""
-	
-	is_create = False
-	
-	make_parent_dir(db_path)
-	
-	if not os.path.exists(db_path):
-		is_create = True
-	
-	db_con = sqlite3.connect( db_path, isolation_level=None )
-	db_con.row_factory = sqlite3.Row
-	
-	cur = db_con.cursor()
-	res = cur.execute("PRAGMA journal_mode = WAL;")
-	cur.close()
-	
-	if is_create:
-		create_model_db(db_con)
-		
-	return db_con
-
-
-def create_model_db(db_con):
-	
-	"""
-	Create database
-	"""
-	
-	cur = db_con.cursor()
-	
-	sql = """CREATE TABLE history(
-		model_name text NOT NULL,
-		epoch_number integer NOT NULL,
-		time real NOT NULL,
-		acc_train real NOT NULL,
-		acc_test real NOT NULL,
-		acc_rel real NOT NULL,
-		loss_train real NOT NULL,
-		loss_test real NOT NULL,
-		batch_train_iter integer NOT NULL,
-		batch_test_iter integer NOT NULL,
-		train_count_iter integer NOT NULL,
-		test_count_iter integer NOT NULL,
-		loss_train_iter real NOT NULL,
-		loss_test_iter real NOT NULL,
-		acc_train_iter real NOT NULL,
-		acc_test_iter real NOT NULL,
-		info text NOT NULL,
-		PRIMARY KEY ("model_name", "epoch_number")
-	)"""
-	cur.execute(sql)
-	
-	cur.close()
-	
-	
-def save_train_status(model):
-		
-	"""
-	Save train status
-	"""
-	
-	epoch_number = model.history.epoch_number
-	epoch_record = model.history.get_epoch(epoch_number)
-	
-	if epoch_number > 0 and epoch_record is not None:
-		
-		db_con = open_model_db(
-			db_path = os.path.join( model.get_model_path(), "model.db" )
-		)
-		
-		sql = """
-			insert or replace into history (
-				model_name, epoch_number, acc_train,
-				acc_test, acc_rel, loss_train, loss_test,
-				batch_train_iter, batch_test_iter,
-				train_count_iter, test_count_iter,
-				loss_train_iter, loss_test_iter,
-				acc_train_iter, acc_test_iter,
-				time, info
-			) values
-			(
-				:model_name, :epoch_number, :acc_train,
-				:acc_test, :acc_rel, :loss_train, :loss_test,
-				:batch_train_iter, :batch_test_iter,
-				:train_count_iter, :test_count_iter,
-				:loss_train_iter, :loss_test_iter,
-				:acc_train_iter, :acc_test_iter,
-				:time, :info
-			)
-		"""
-		
-		history = model.history
-		obj = {
-			"model_name": model.model_name,
-			"epoch_number": epoch_number,
-			"acc_train": epoch_record["acc_train"],
-			"acc_test": epoch_record["acc_test"],
-			"acc_rel": epoch_record["acc_rel"],
-			"loss_train": epoch_record["loss_train"],
-			"loss_test": epoch_record["loss_test"],
-			"time": epoch_record["time"],
-			"batch_train_iter": epoch_record["batch_train_iter"],
-			"batch_test_iter": epoch_record["batch_test_iter"],
-			"train_count_iter": epoch_record["train_count_iter"],
-			"test_count_iter": epoch_record["test_count_iter"],
-			"loss_train_iter": epoch_record["loss_train_iter"],
-			"loss_test_iter": epoch_record["loss_test_iter"],
-			"acc_train_iter": epoch_record["acc_train_iter"],
-			"acc_test_iter": epoch_record["acc_test_iter"],
-			"info": "{}",
-		}
-		
-		cur = db_con.cursor()
-		res = cur.execute(sql, obj)
-		cur.close()
-		
-		db_con.commit()
-		db_con.close()
-
-
-def load_train_status(model, epoch_number=None):
-		
-	"""
-	Load train status
-	"""
-	
-	db_con = open_model_db(
-		db_path = os.path.join( model.get_model_path(), "model.db" )
-	)
-	
-	sql = """
-		select * from "history"
-		where model_name=:model_name
-		order by epoch_number asc
-	"""
-	
-	cur = db_con.cursor()
-	res = cur.execute(sql, {"model_name": model.model_name})
-	
-	records = res.fetchall()
-	
-	for record in records:
-		
-		if epoch_number is not None:
-			if record["epoch_number"] > epoch_number:
-				continue
-		
-		model.history.add( record )
-	
-	cur.close()
-	
-	db_con.commit()
-	db_con.close()
-
-
-def save_model_file(model, epoch_number=None):
-		
-	"""
-	Save model to file
-	"""
-	
-	file_path = os.path.join( model.get_model_path(), "model.data" )
-	if epoch_number is not None:
-		file_path = os.path.join( model.get_model_path(), "model-" + str(epoch_number) + ".data" )
-	
-	make_parent_dir(file_path)
-	torch.save(model.module.state_dict(), file_path)
-
-
-def save_optimizer_file(model, optimizer):
-	
-	epoch_number = model.history.epoch_number
-	file_path = os.path.join( model.get_model_path(), "model-" +
-		str(epoch_number) + "-optimizer.data" )
-	
-	make_parent_dir(file_path)
-	torch.save(optimizer.state_dict(), file_path)
-
-
-def save_model(model, save_epoch=False):
-		
-	"""
-	Save model
-	"""
-	
-	save_model_file(model)
-	save_train_status(model)
-	
-	if save_epoch:
-		save_model_file(model, model.history.epoch_number)
-
-
-def load_model(model, epoch_number=None):
-		
-	"""
-	Load model
-	"""
-	
-	state_dict = None
-	
-	file_path = os.path.join( model.get_model_path(), "model.data" )
-	if epoch_number is not None:
-		file_path = os.path.join( model.get_model_path(), "model-" + str(epoch_number) + ".data" )
-	
-	try:
-		if os.path.isfile(file_path):
-			state_dict = torch.load(file_path)
-	
-	except:
-		pass
-	
-	if state_dict:
-		load_train_status(model, epoch_number)
-		model.module.load_state_dict(state_dict)
-		return True
-	
-	return False
-
-
-def load_optimizer(model, optimizer):
-	
-	epoch_number = model.history.epoch_number
-	file_path = os.path.join( model.get_model_path(), "model-" +
-		str(epoch_number) + "-optimizer.data" )
-	
-	state_dict = None
-	if os.path.isfile(file_path):
-		state_dict = torch.load(file_path)
-	
-	if state_dict:
-		optimizer.load_state_dict(state_dict)
+				
+			else:
+				
+				layer_name = str( index ) + "_Layer"
+				self.add_module(layer_name, obj)

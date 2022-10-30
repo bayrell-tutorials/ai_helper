@@ -295,6 +295,11 @@ class Transform_Flat(torch.nn.Module):
 		t = t.reshape( shape )
 		
 		return t
+	
+	def extra_repr(self) -> str:
+		return 'pos={}'.format(
+			self.pos
+		)
 
 
 def Flat(pos=1):
@@ -310,7 +315,8 @@ class Transform_InsertFirstAxis(torch.nn.Module):
 	def __call__(self, t):
 		t = t[:,None,:]
 		return t
-
+	
+	
 
 def InsertFirstAxis():
 	
@@ -407,13 +413,42 @@ class Transform_ResizeImage(torch.nn.Module):
 		t = resize_image(t, self.size, contain=self.contain, color=self.color)
 		
 		return t
-
+	
+	def extra_repr(self) -> str:
+		return 'size={}, contain={}, color={}'.format(
+			self.size, self.contain, self.color
+		)
+	
 def ResizeImage(size, contain=True, color=None):
 	return Layer("ResizeImage", Transform_ResizeImage(size, contain=contain, color=color))
 
 
-def NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+class Transform_NormalizeImage(torch.nn.Module):
+	
+	def __init__(self, mean, std, inplace=False):
+		
+		import torchvision
+		
+		torch.nn.Module.__init__(self)
+		
+		self.mean = mean
+		self.std = std
+		self.inplace = inplace
+		self.normalize = torchvision.transforms.Normalize(mean=mean, std=std, inplace=inplace)
+	
+	def __call__(self, t):
+		
+		t = self.normalize(t)
+		
+		return t
+	
+	def extra_repr(self) -> str:
+		return 'mean={}, std={}, inplace={}'.format(
+			self.mean, self.std, self.inplace
+		)
+	
+def NormalizeImage(mean, std, inplace=False):
 	import torchvision
 	return Layer("NormalizeImage",
-		torchvision.transforms.Normalize(mean=mean, std=std)
+		torchvision.transforms.Normalize(mean=mean, std=std, inplace=inplace)
 	)

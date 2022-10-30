@@ -163,11 +163,11 @@ class TrainStatus:
 		
 		self.clear()
 		self.model = model
-		self.epoch_number = model.history.epoch_number
+		self.epoch_number = model._history.epoch_number
 		
 		if self.epoch_number > 0:
 			
-			record = model.history.get_epoch(self.epoch_number)
+			record = model._history.get_epoch(self.epoch_number)
 			
 			self.batch_train_iter = record["batch_train_iter"]
 			self.batch_test_iter = record["batch_test_iter"]
@@ -338,7 +338,7 @@ class TrainSaveCallback:
 		Returns teh best epoch
 		"""
 		
-		metrics = model.history.get_metrics(["loss_test", "acc_rel"], with_index=True)
+		metrics = model._history.get_metrics(["loss_test", "acc_rel"], with_index=True)
 		
 		def get_key(item):
 			return [item[1], item[2]]
@@ -377,10 +377,10 @@ class TrainSaveCallback:
 		Save the best models
 		"""
 		
-		if model.history.epoch_number > 0 and epoch_count > 0:
+		if model._history.epoch_number > 0 and epoch_count > 0:
 			
 			epoch_indexes = self.get_the_best_epoch(model, epoch_count, indexes=True)
-			epoch_indexes.append( model.history.epoch_number )
+			epoch_indexes.append( model._history.epoch_number )
 			
 			self.save_epoch_indexes(model, epoch_indexes)
 	
@@ -440,7 +440,7 @@ class Trainer:
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
 		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
-		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else True
+		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else False
 		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
 		
 		self._check_is_trained = kwargs["check_is_trained"] \
@@ -564,7 +564,7 @@ class Trainer:
 		if self._is_trained:
 			self.stop_training()
 		
-		self.model.history.add_train_status(self.train_status)
+		self.model._history.add_train_status(self.train_status)
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_epoch"):
@@ -598,14 +598,15 @@ class Trainer:
 		"""
 		
 		model = self.model
+		torch.cuda.empty_cache()
 		
 		# Adam optimizer
 		if self.optimizer is None:
-			self.optimizer = torch.optim.Adam(model.module.parameters(), lr=self.lr)
+			self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
 		
 		if self.save_epoch:
 			model.load_optimizer(self.optimizer)
-			
+		
 		# Mean squared error
 		if self.loss is None:
 			self.loss = torch.nn.MSELoss()
@@ -631,7 +632,7 @@ class Trainer:
 				shuffle=False
 			)
 		
-		module = model.module.to(tensor_device)
+		module = model.to(tensor_device)
 		
 		# Do train
 		train_status = self.train_status
@@ -653,6 +654,8 @@ class Trainer:
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
+					self.optimizer.zero_grad()
+					
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
 					batch_x, batch_y = model.convert_batch(x=batch_x, y=batch_y)
@@ -661,13 +664,13 @@ class Trainer:
 					
 					# Predict model
 					batch_predict = module(batch_x)
-
+					
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_train_iter = train_status.loss_train_iter + loss_value.item()
+					train_status.loss_train_iter = train_status.loss_train_iter + \
+						loss_value.data.item()
 					
 					# Gradient
-					self.optimizer.zero_grad()
 					loss_value.backward()
 					self.optimizer.step()
 					
@@ -708,7 +711,8 @@ class Trainer:
 					
 					# Get loss value
 					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_test_iter = train_status.loss_test_iter + loss_value.item()
+					train_status.loss_test_iter = train_status.loss_test_iter + \
+						loss_value.data.item()
 					
 					# Calc accuracy
 					accuracy = model.check_answer_batch(
@@ -759,7 +763,7 @@ def do_train(model, *args, **kwargs):
 	
 	# Train the model
 	if not trainer.check_is_trained():
-		print ("Train model " + str(model.model_name))
+		print ("Train model " + str(model._model_name))
 		trainer.train()
 	
 	return trainer
