@@ -377,16 +377,3 @@ def get_tensor_device():
 	"""
 	
 	return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-
-def load_pth_file(cached_file, map_location = None):
-	
-	model_dir = cached_file + "_dir"
-	state_dict = None
-	
-	if torch.hub._is_legacy_zip_format(cached_file):
-		state_dict = torch.hub._legacy_zip_load(cached_file, model_dir, map_location)
-	else:
-		state_dict = torch.load(cached_file, map_location=map_location)
-
-	return state_dict

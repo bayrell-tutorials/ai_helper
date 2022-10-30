@@ -235,7 +235,7 @@ class Model(torch.nn.Module):
 			tensor_device = get_tensor_device()
 		
 		x = x.to(tensor_device)
-		module = self.module.to(tensor_device)
+		module = self.to(tensor_device)
 		x, _ = self.convert_batch(x=x)
 		
 		y = module(x)
@@ -243,7 +243,7 @@ class Model(torch.nn.Module):
 		return y
 	
 	
-	def predict_dataset(self, dataset, batch_size=32, tensor_device=None):
+	def predict_dataset(self, dataset, batch_size=32, tensor_device=None, progress=None):
 		
 		from torch.utils.data import DataLoader
 		
@@ -261,7 +261,9 @@ class Model(torch.nn.Module):
 		)
 		
 		res = torch.tensor([])
-		module = self.module.to(tensor_device)
+		module = self.to(tensor_device)
+		count = len(dataset)
+		batch_iter = 0
 		
 		for batch_x, _ in loader:
 			
@@ -274,6 +276,17 @@ class Model(torch.nn.Module):
 			
 			res = torch.cat( (res, batch_predict) )
 			
+			batch_iter = batch_iter + 1
+			
+			if progress is not None:
+				progress(batch_iter, batch_size, count)
+			
+			del batch_x
+			
+			# Clear CUDA
+			if torch.cuda.is_available():
+				torch.cuda.empty_cache()
+		
 		return res
 	
 	
@@ -592,6 +605,34 @@ class Model(torch.nn.Module):
 		
 		if state_dict:
 			optimizer.load_state_dict(state_dict)
+
+
+class PreparedModel(torch.nn.Module):
+	
+	def __init__(self, model, weight_path, *args, **kwargs):
+		
+		torch.nn.Module.__init__(self)
+		
+		self.model = model
+		self.weight_path = weight_path
+	
+		for param in self.model.parameters():
+			param.requires_grad = False
+	
+	
+	def forward(self, x):
+		x = self.model(x)
+		return x
+	
+	
+	def load(self, *args, **kwargs):
+		
+		"""
+		Load model from file
+		"""
+		
+		state_dict = torch.load( self.weight_path )
+		self.model.load_state_dict( state_dict )
 
 
 class ExtendModule(torch.nn.Module):
