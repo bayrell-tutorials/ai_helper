@@ -308,12 +308,14 @@ class TrainVerboseCallback:
 		loss_train = trainer.train_status.get_loss_train()
 		time = trainer.train_status.get_time()
 		
+		loss_train = '%.3e' % loss_train
+		
 		msg = ("\rStep {epoch_number}, {iter_value}%" +
-			", acc: .{acc}, loss: .{loss}, time: {time}s"
+			", acc: .{acc}, loss: {loss}, time: {time}s"
 		).format(
 			epoch_number = trainer.train_status.epoch_number,
 			iter_value = round(trainer.train_status.get_iter_value() * 100),
-			loss = str(round(loss_train * 10000)).zfill(4),
+			loss = loss_train,
 			acc = str(round(acc_train * 100)).zfill(2),
 			time = str(round(time)),
 		)
@@ -335,20 +337,23 @@ class TrainVerboseCallback:
 		time = trainer.train_status.get_time()
 		res_lr = trainer.train_status.get_lr()
 		
+		loss_train = '%.3e' % loss_train
+		loss_test = '%.3e' % loss_test
+		
 		print ("\r", end='')
 		
 		msg = ("Step {epoch_number}, " +
 			"acc: .{acc_train}, " +
 			"acc_test: .{acc_test}, " +
 			"acc_rel: {acc_rel}, " +
-			"loss: .{loss_train}, " +
-			"loss_test: .{loss_test}, " +
+			"loss: {loss_train}, " +
+			"loss_test: {loss_test}, " +
 			"lr: {lr}, " +
 			"time: {time}s "
 		).format(
 			epoch_number = trainer.train_status.epoch_number,
-			loss_train = str(round(loss_train * 10000)).zfill(4),
-			loss_test = str(round(loss_test * 10000)).zfill(4),
+			loss_train = loss_train,
+			loss_test = loss_test,
 			acc_train = str(round(acc_train * 100)).zfill(2),
 			acc_test = str(round(acc_test * 100)).zfill(2),
 			acc_rel = str(round(acc_rel * 100) / 100),
@@ -612,22 +617,22 @@ class Trainer:
 		self.verbose = True
 		self.num_workers = os.cpu_count()
 		
-		self.load_model = kwargs["load_model"] if "load_model" in kwargs else False
+		self.load_model = kwargs["load_model"] if "load_model" in kwargs else True
 		self.load_epoch = kwargs["load_epoch"] if "load_epoch" in kwargs else None
 		self.load_file_path = kwargs["load_file_path"] if "load_file_path" in kwargs else None
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 1.5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.0005
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.0001
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
 		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
-		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else False
+		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else True
 		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
-		self.scheduler_enable = kwargs["scheduler_enable"] if "scheduler_enable" in kwargs else False
+		self.scheduler_enable = kwargs["scheduler_enable"] if "scheduler_enable" in kwargs else True
 		
 		if "optimizer" in kwargs:
 			self.optimizer = kwargs["optimizer"]
