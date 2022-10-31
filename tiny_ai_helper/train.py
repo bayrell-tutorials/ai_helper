@@ -519,6 +519,8 @@ class TrainSaveCallback:
 			for callback in trainer.callbacks:
 				if hasattr(callback, "load_metricks"):
 					callback.load_metricks(trainer, save_metricks)
+					
+			trainer.train_status.set_model(trainer.model)
 			
 	
 	
@@ -552,7 +554,43 @@ class TrainSaveCallback:
 				epoch_count=trainer.save_epoch_count
 			)
 		
+
+class TrainCheckIsTrainedCallback:
+	
+	def check_is_trained(self, trainer):
 		
+		"""
+		Returns True if model is trained
+		"""
+		
+		epoch_number = trainer.train_status.epoch_number
+		acc_train = trainer.train_status.get_acc_train()
+		acc_test = trainer.train_status.get_acc_test()
+		acc_rel = trainer.train_status.get_acc_rel()
+		loss_test = trainer.train_status.get_loss_test()
+		
+		if epoch_number >= trainer.max_epochs:
+			return True
+		
+		if acc_rel > trainer.max_acc_rel and acc_train > 0.8:
+			return True
+		
+		if loss_test < trainer.min_loss_test and epoch_number >= trainer.min_epochs:
+			return True
+		
+		return False
+	
+	
+	def on_end_epoch(self, trainer):
+		
+		"""
+		On epoch end
+		"""
+		
+		is_trained = self.check_is_trained(trainer)
+		if is_trained:
+			trainer.stop_training()
+
 
 class Trainer:
 	
@@ -562,7 +600,6 @@ class Trainer:
 		
 		self.train_status = TrainStatus()
 		self.train_status.trainer = self
-		self.train_status.set_model(model)
 		
 		self.train_loader = None
 		self.test_loader = None
@@ -580,9 +617,8 @@ class Trainer:
 		self.load_file_path = kwargs["load_file_path"] if "load_file_path" in kwargs else None
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
-		self.max_acc = kwargs["max_acc"] if "max_acc" in kwargs else 0.95
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 1.5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.001
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.0005
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
@@ -592,9 +628,6 @@ class Trainer:
 		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else False
 		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
 		self.scheduler_enable = kwargs["scheduler_enable"] if "scheduler_enable" in kwargs else False
-		
-		self._check_is_trained = kwargs["check_is_trained"] \
-			if "check_is_trained" in kwargs else None
 		
 		if "optimizer" in kwargs:
 			self.optimizer = kwargs["optimizer"]
@@ -609,41 +642,12 @@ class Trainer:
 			self.callbacks = kwargs["callbacks"]
 		else:
 			self.callbacks = [
+				TrainCheckIsTrainedCallback(),
 				TrainShedulerCallback(),
 				TrainAccuracyCallback(),
 				TrainVerboseCallback(),
 				TrainSaveCallback(),
 			]
-		
-	
-	def check_is_trained(self):
-		
-		"""
-		Returns True if model is trained
-		"""
-		
-		if self._check_is_trained is not None:
-			return self._check_is_trained(self.train_status)
-		
-		epoch_number = self.train_status.epoch_number
-		acc_train = self.train_status.get_acc_train()
-		acc_test = self.train_status.get_acc_test()
-		acc_rel = self.train_status.get_acc_rel()
-		loss_test = self.train_status.get_loss_test()
-		
-		if epoch_number >= self.max_epochs:
-			return True
-		
-		if acc_test > self.max_acc  and epoch_number >= self.min_epochs:
-			return True
-		
-		if acc_rel > self.max_acc_rel and acc_train > 0.8:
-			return True
-		
-		if loss_test < self.min_loss_test and epoch_number >= self.min_epochs:
-			return True
-		
-		return False
 	
 	
 	"""	====================== Events ====================== """
@@ -720,11 +724,6 @@ class Trainer:
 		On epoch end
 		"""
 		
-		self._is_trained = self.check_is_trained()
-		
-		if self._is_trained:
-			self.stop_training()
-		
 		self.model._history.add_train_status(self.train_status)
 		
 		for callback in self.callbacks:
@@ -750,7 +749,22 @@ class Trainer:
 		"""
 		
 		self.train_status.stop_train()
+	
+	
+	def check_is_trained(self):
 		
+		"""
+		Check is trained
+		"""
+		
+		for callback in self.callbacks:
+			if hasattr(callback, "check_is_trained"):
+				res = callback.check_is_trained(self)
+				if res:
+					return True
+		
+		return False
+	
 	
 	def train(self):
 		
@@ -798,8 +812,14 @@ class Trainer:
 		train_status.do_training = True
 		train_status.train_data_count = len(self.train_dataset)
 		
+		# Start train
 		self.on_start_train()
-		train_status.epoch_number = self.model._history.epoch_number
+		
+		# Train the model
+		if self.check_is_trained():
+			return
+		
+		print ("Train model " + str(model._model_name))
 		
 		try:
 		
@@ -899,12 +919,8 @@ def do_train(model, *args, **kwargs):
 	"""
 	
 	trainer = Trainer(model, *args, **kwargs)
-	
-	# Train the model
-	if not trainer.check_is_trained():
-		print ("Train model " + str(model._model_name))
-		trainer.train()
-	
+	trainer.train()
+		
 	return trainer
 
 
