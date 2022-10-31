@@ -623,7 +623,7 @@ class Trainer:
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.0001
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 2e-4
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
