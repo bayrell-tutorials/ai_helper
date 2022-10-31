@@ -165,20 +165,6 @@ class Model(torch.nn.Module):
 			y = y.to(torch.float)
 		
 		return x, y
-	
-	
-	def create_model(self):
-		
-		"""
-		Create model
-		"""
-		
-		self.module = None
-		
-		if self._layers is not None:
-			
-			self.module = ExtendModule(self)
-			self.module.init_layers(self._layers, debug=self._is_debug)
 			
 	
 	def summary(self, verbose=True, tensor_device=None):
@@ -449,6 +435,7 @@ class Model(torch.nn.Module):
 		Save model to file
 		"""
 		
+		save_metricks["name"] = self._model_name
 		save_metricks["history"] = self._history.state_dict()
 		save_metricks["state_dict"] = self.state_dict()
 		make_parent_dir(file_path)
@@ -566,11 +553,9 @@ class PreparedModel(torch.nn.Module):
 		for param in self.model.parameters():
 			param.requires_grad = False
 	
-	
 	def forward(self, x):
 		x = self.model(x)
 		return x
-	
 	
 	def load(self, *args, **kwargs):
 		
@@ -676,3 +661,19 @@ class ExtendModel(Model):
 				layer_name = str( index ) + "_Layer"
 				self.add_module(layer_name, obj)
 
+
+class CustomModel(Model):
+	
+	def __init__(self, module, *args, **kwargs):
+		Model.__init__(self, *args, **kwargs)
+		self.module = module
+	
+	def forward(self, x):
+		x = self.module(x)
+		return x
+	
+	def state_dict(self):
+		return torch.nn.Module.state_dict(self.module)
+	
+	def load_state_dict(self, state_dict):
+		self.module.load_state_dict(state_dict)

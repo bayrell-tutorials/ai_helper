@@ -356,7 +356,7 @@ class TrainVerboseCallback:
 			loss_test = loss_test,
 			acc_train = str(round(acc_train * 100)).zfill(2),
 			acc_test = str(round(acc_test * 100)).zfill(2),
-			acc_rel = str(round(acc_rel * 100) / 100),
+			acc_rel = str(round(acc_rel * 100) / 100).ljust(4, "0"),
 			time = str(round(time)),
 			lr = str(res_lr),
 		)
@@ -622,7 +622,7 @@ class Trainer:
 		self.load_file_path = kwargs["load_file_path"] if "load_file_path" in kwargs else None
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
-		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 1.5
+		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
 		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 0.0001
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
@@ -856,7 +856,7 @@ class Trainer:
 					# Save train status
 					train_status.batch_train_iter = train_status.batch_train_iter + 1
 					train_status.loss_train_iter = train_status.loss_train_iter + loss.data.item()
-					train_status.train_count_iter = train_status.train_count_iter + self.batch_size
+					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
 					train_status.time_end = time.time()
 					
 					self.on_end_batch_train(batch_x, batch_y, batch_predict, loss)
@@ -888,7 +888,7 @@ class Trainer:
 					# Save train status
 					train_status.batch_test_iter = train_status.batch_test_iter + 1
 					train_status.loss_test_iter = train_status.loss_test_iter + loss.data.item()
-					train_status.test_count_iter = train_status.test_count_iter + self.batch_size
+					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
 					train_status.time_end = time.time()
 					
 					self.on_end_batch_test(batch_x, batch_y, batch_predict, loss)
