@@ -8,7 +8,7 @@
 from .model import Model, ExtendModel, PreparedModel
 from .train import TrainStatus, TrainVerboseCallback, do_train
 
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 
 __all__ = (
 	
