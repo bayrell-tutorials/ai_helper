@@ -5,9 +5,9 @@
 # License: MIT
 ##
 
-import os, time, torch
+import os, time, torch, json
 from torch.utils.data import TensorDataset, DataLoader, Dataset
-from .utils import get_tensor_device, list_files, indexOf
+from .utils import get_tensor_device, list_files, indexOf, get_class_name
 
 
 class TrainHistory:
@@ -16,6 +16,40 @@ class TrainHistory:
 		
 		self.epoch_number = 0
 		self.epoch = {}
+	
+	
+	def clear(self):
+		
+		"""
+		Clear history
+		"""
+		
+		self.epoch_number = 0
+		self.epoch = {}
+	
+	
+	def load_state_dict(self, dict):
+		
+		"""
+		Load state
+		"""
+		
+		self.epoch_number = dict["epoch_number"]
+		self.epoch = dict["epoch"]
+	
+	
+	def state_dict(self):
+		
+		"""
+		Get state
+		"""
+		
+		obj = {
+			"epoch_number": self.epoch_number,
+			"epoch": self.epoch,
+		}
+		
+		return obj
 	
 	
 	def add(self, record):
@@ -34,6 +68,7 @@ class TrainHistory:
 			"acc_test": record["acc_test"],
 			"acc_rel": record["acc_rel"],
 			"time": record["time"],
+			"lr": record["lr"],
 			"batch_train_iter": record["batch_train_iter"],
 			"batch_test_iter": record["batch_test_iter"],
 			"train_count_iter": record["train_count_iter"],
@@ -58,6 +93,7 @@ class TrainHistory:
 		acc_test = train_status.get_acc_test()
 		acc_rel = train_status.get_acc_rel()
 		time = train_status.get_time()
+		lr = train_status.get_lr()
 		
 		self.add( {
 			
@@ -68,6 +104,7 @@ class TrainHistory:
 			"acc_test": acc_test,
 			"acc_rel": acc_rel,
 			"time": time,
+			"lr": json.dumps(lr),
 			"batch_train_iter": train_status.batch_train_iter,
 			"batch_test_iter": train_status.batch_test_iter,
 			"train_count_iter": train_status.train_count_iter,
@@ -144,6 +181,7 @@ class TrainStatus:
 	
 	def __init__(self):
 		self.model = None
+		self.batch_size = 0
 		self.batch_train_iter = 0
 		self.batch_test_iter = 0
 		self.train_count_iter = 0
@@ -234,11 +272,37 @@ class TrainStatus:
 	def get_time(self):
 		return self.time_end - self.time_start
 	
+	def get_lr(self):
+		
+		res_lr = []
+		for param_group in self.trainer.optimizer.param_groups:
+			res_lr.append(param_group['lr'])
+			
+		return res_lr
+
+
+class TrainAccuracyCallback:
+	
+	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
+		
+		batch_y = torch.argmax(batch_y, dim=1)
+		batch_predict = torch.argmax(batch_predict, dim=1)
+		acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+		trainer.train_status.acc_train_iter = trainer.train_status.acc_train_iter + acc
+	
+	
+	def on_end_batch_test(self, trainer, batch_x, batch_y, batch_predict, loss):
+		
+		batch_y = torch.argmax(batch_y, dim=1)
+		batch_predict = torch.argmax(batch_predict, dim=1)
+		acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+		trainer.train_status.acc_test_iter = trainer.train_status.acc_test_iter + acc
+	
 
 class TrainVerboseCallback:
 	
 	
-	def on_end_batch_train(self, trainer):
+	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
 		
 		acc_train = trainer.train_status.get_acc_train()
 		loss_train = trainer.train_status.get_loss_train()
@@ -269,6 +333,7 @@ class TrainVerboseCallback:
 		acc_test = trainer.train_status.get_acc_test()
 		acc_rel = trainer.train_status.get_acc_rel()
 		time = trainer.train_status.get_time()
+		res_lr = trainer.train_status.get_lr()
 		
 		print ("\r", end='')
 		
@@ -278,7 +343,8 @@ class TrainVerboseCallback:
 			"acc_rel: {acc_rel}, " +
 			"loss: .{loss_train}, " +
 			"loss_test: .{loss_test}, " +
-			"time: {time}s, "
+			"lr: {lr}, " +
+			"time: {time}s "
 		).format(
 			epoch_number = trainer.train_status.epoch_number,
 			loss_train = str(round(loss_train * 10000)).zfill(4),
@@ -287,11 +353,61 @@ class TrainVerboseCallback:
 			acc_test = str(round(acc_test * 100)).zfill(2),
 			acc_rel = str(round(acc_rel * 100) / 100),
 			time = str(round(time)),
+			lr = str(res_lr),
 		)
 		
 		print (msg)
 	
+
+class TrainShedulerCallback:
 	
+	def __init__(self):
+		self.scheduler = None
+	
+	
+	def save_metricks(self, trainer, metricks):
+		
+		"""
+		Save metricks
+		"""
+		
+		metricks["scheduler"] = self.scheduler.state_dict()
+		metricks["scheduler_name"] = get_class_name(self.scheduler)
+		
+	
+	def load_metricks(self, trainer, metricks):
+		
+		"""
+		Load metricks
+		"""
+		
+		if self.scheduler is not None and metricks is not None and "scheduler" in metricks:
+			self.scheduler.load_state_dict(metricks["scheduler"])
+	
+	
+	def on_start_train(self, trainer):
+		
+		"""
+		Start train event
+		"""
+		
+		if self.scheduler is None and trainer.scheduler_enable:
+			self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+				trainer.optimizer
+			)
+	
+	
+	def on_end_epoch(self, trainer):
+		
+		"""
+		On epoch end
+		"""
+		
+		if self.scheduler is not None:
+			loss_test = trainer.train_status.get_loss_test()
+			self.scheduler.step(loss_test)
+	
+
 class TrainSaveCallback:
 	
 	
@@ -385,18 +501,48 @@ class TrainSaveCallback:
 			self.save_epoch_indexes(model, epoch_indexes)
 	
 	
+	def on_start_train(self, trainer):
+		
+		"""
+		Start train event
+		"""
+		
+		if trainer.load_model:
+			save_metricks = trainer.model.load(
+				epoch_number=trainer.load_epoch,
+				file_path=trainer.load_file_path,
+			)
+			
+			if save_metricks is not None and "optimizer" in save_metricks:
+				trainer.optimizer.load_state_dict(save_metricks["optimizer"])
+			
+			for callback in trainer.callbacks:
+				if hasattr(callback, "load_metricks"):
+					callback.load_metricks(trainer, save_metricks)
+			
+	
+	
 	def on_end_epoch(self, trainer):
 		
 		"""
 		On epoch end
 		"""
 		
+		save_metricks = {
+			"optimizer": trainer.optimizer.state_dict(),
+			"optimizer_name": get_class_name(trainer.optimizer),
+		}
+		
+		for callback in trainer.callbacks:
+			if hasattr(callback, "save_metricks"):
+				callback.save_metricks(trainer, save_metricks)
+		
 		trainer.model.save(
-			save_epoch=trainer.save_epoch
+			save_epoch=trainer.save_epoch,
+			save_metricks=save_metricks,
 		)
 		
 		if trainer.save_epoch:
-			trainer.model.save_optimizer(trainer.optimizer)
 			
 			"""
 			Save best epoch
@@ -429,6 +575,9 @@ class Trainer:
 		self.verbose = True
 		self.num_workers = os.cpu_count()
 		
+		self.load_model = kwargs["load_model"] if "load_model" in kwargs else False
+		self.load_epoch = kwargs["load_epoch"] if "load_epoch" in kwargs else None
+		self.load_file_path = kwargs["load_file_path"] if "load_file_path" in kwargs else None
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc = kwargs["max_acc"] if "max_acc" in kwargs else 0.95
@@ -442,14 +591,26 @@ class Trainer:
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
 		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else False
 		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
+		self.scheduler_enable = kwargs["scheduler_enable"] if "scheduler_enable" in kwargs else False
 		
 		self._check_is_trained = kwargs["check_is_trained"] \
 			if "check_is_trained" in kwargs else None
+		
+		if "optimizer" in kwargs:
+			self.optimizer = kwargs["optimizer"]
+		
+		if "loss" in kwargs:
+			self.optimizer = kwargs["loss"]
+		
+		if "num_workers" in kwargs:
+			self.optimizer = kwargs["num_workers"]
 		
 		if "callbacks" in kwargs:
 			self.callbacks = kwargs["callbacks"]
 		else:
 			self.callbacks = [
+				TrainShedulerCallback(),
+				TrainAccuracyCallback(),
 				TrainVerboseCallback(),
 				TrainSaveCallback(),
 			]
@@ -517,10 +678,10 @@ class Trainer:
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_start_batch_train"):
-				callback.on_start_batch_train(self)
+				callback.on_start_batch_train(self, batch_x, batch_y)
 	
 	
-	def on_end_batch_train(self, batch_x, batch_y):
+	def on_end_batch_train(self, batch_x, batch_y, batch_predict, loss):
 		
 		"""
 		End train batch event
@@ -528,7 +689,7 @@ class Trainer:
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_batch_train"):
-				callback.on_end_batch_train(self)
+				callback.on_end_batch_train(self, batch_x, batch_y, batch_predict, loss)
 	
 	
 	def on_start_batch_test(self, batch_x, batch_y):
@@ -539,10 +700,10 @@ class Trainer:
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_start_batch_test"):
-				callback.on_start_batch_test(self)
+				callback.on_start_batch_test(self, batch_x, batch_y)
 	
 	
-	def on_end_batch_test(self, batch_x, batch_y):
+	def on_end_batch_test(self, batch_x, batch_y, batch_predict, loss):
 		
 		"""
 		End test batch event
@@ -550,7 +711,7 @@ class Trainer:
 		
 		for callback in self.callbacks:
 			if hasattr(callback, "on_end_batch_test"):
-				callback.on_end_batch_test(self)
+				callback.on_end_batch_test(self, batch_x, batch_y, batch_predict, loss)
 	
 	
 	def on_end_epoch(self, **kwargs):
@@ -604,9 +765,6 @@ class Trainer:
 		if self.optimizer is None:
 			self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
 		
-		if self.save_epoch:
-			model.load_optimizer(self.optimizer)
-		
 		# Mean squared error
 		if self.loss is None:
 			self.loss = torch.nn.MSELoss()
@@ -636,9 +794,12 @@ class Trainer:
 		
 		# Do train
 		train_status = self.train_status
+		train_status.batch_size = self.batch_size
 		train_status.do_training = True
 		train_status.train_data_count = len(self.train_dataset)
+		
 		self.on_start_train()
+		train_status.epoch_number = self.model._history.epoch_number
 		
 		try:
 		
@@ -654,42 +815,28 @@ class Trainer:
 				# Train batch
 				for batch_x, batch_y in self.train_loader:
 					
-					self.optimizer.zero_grad()
-					
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
 					batch_x, batch_y = model.convert_batch(x=batch_x, y=batch_y)
 					
 					self.on_start_batch_train(batch_x, batch_y)
 					
-					# Predict model
+					# Predict
+					self.optimizer.zero_grad()
 					batch_predict = module(batch_x)
-					
-					# Get loss value
-					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_train_iter = train_status.loss_train_iter + \
-						loss_value.data.item()
-					
-					# Gradient
-					loss_value.backward()
+					loss = self.loss(batch_predict, batch_y)
+					loss.backward()
 					self.optimizer.step()
 					
-					# Calc accuracy
-					accuracy = model.check_answer_batch(
-						train_status = train_status,
-						batch_x = batch_x,
-						batch_y = batch_y,
-						batch_predict = batch_predict,
-						type = "train"
-					)
-					train_status.acc_train_iter = train_status.acc_train_iter + accuracy
+					# Save train status
 					train_status.batch_train_iter = train_status.batch_train_iter + 1
-					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
-					
+					train_status.loss_train_iter = train_status.loss_train_iter + loss.data.item()
+					train_status.train_count_iter = train_status.train_count_iter + self.batch_size
 					train_status.time_end = time.time()
-					self.on_end_batch_train(batch_x, batch_y)
 					
-					del batch_x, batch_y
+					self.on_end_batch_train(batch_x, batch_y, batch_predict, loss)
+					
+					del batch_x, batch_y, batch_predict
 					
 					# Clear CUDA
 					if torch.cuda.is_available():
@@ -706,30 +853,22 @@ class Trainer:
 					
 					self.on_start_batch_test(batch_x, batch_y)
 					
-					# Predict model
+					# Predict
+					self.optimizer.zero_grad()
 					batch_predict = module(batch_x)
+					loss = self.loss(batch_predict, batch_y)
+					loss.backward()
+					self.optimizer.step()
 					
-					# Get loss value
-					loss_value = self.loss(batch_predict, batch_y)
-					train_status.loss_test_iter = train_status.loss_test_iter + \
-						loss_value.data.item()
-					
-					# Calc accuracy
-					accuracy = model.check_answer_batch(
-						train_status = train_status,
-						batch_x = batch_x,
-						batch_y = batch_y,
-						batch_predict = batch_predict,
-						type = "test"
-					)
-					train_status.acc_test_iter = train_status.acc_test_iter + accuracy
+					# Save train status
 					train_status.batch_test_iter = train_status.batch_test_iter + 1
-					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
-					
+					train_status.loss_test_iter = train_status.loss_test_iter + loss.data.item()
+					train_status.test_count_iter = train_status.test_count_iter + self.batch_size
 					train_status.time_end = time.time()
-					self.on_end_batch_test(batch_x, batch_y)
 					
-					del batch_x, batch_y
+					self.on_end_batch_test(batch_x, batch_y, batch_predict, loss)
+					
+					del batch_x, batch_y, batch_predict
 					
 					# Clear CUDA
 					if torch.cuda.is_available():

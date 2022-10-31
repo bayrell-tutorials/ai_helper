@@ -377,3 +377,12 @@ def get_tensor_device():
 	"""
 	
 	return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
+def get_class_name(obj):
+	
+	"""
+	Returns class name of object
+	"""
+	
+	return type(obj).__module__ + '.' + type(obj).__name__

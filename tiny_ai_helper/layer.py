@@ -56,7 +56,7 @@ class AbstractLayerFactory:
 		return vector_x
 	
 	
-class Conv3d(AbstractLayerFactory):
+class Layer_Conv3d(AbstractLayerFactory):
 	
 	
 	def __init__(self, out_channels, *args, **kwargs):
@@ -90,7 +90,7 @@ class Conv3d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Conv2d(AbstractLayerFactory):
+class Layer_Conv2d(AbstractLayerFactory):
 	
 	
 	def __init__(self, out_channels, *args, **kwargs):
@@ -124,7 +124,7 @@ class Conv2d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Dropout(AbstractLayerFactory):
+class Layer_Dropout(AbstractLayerFactory):
 	
 	
 	def __init__(self, p, *args, **kwargs):
@@ -149,7 +149,7 @@ class Dropout(AbstractLayerFactory):
 		return layer_out, vector_x
 
 
-class MaxPool2d(AbstractLayerFactory):
+class Layer_MaxPool2d(AbstractLayerFactory):
 	
 	
 	def get_name(self):
@@ -170,7 +170,7 @@ class MaxPool2d(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Linear(AbstractLayerFactory):
+class Layer_Linear(AbstractLayerFactory):
 	
 	def __init__(self, out_features, *args, **kwargs):
 		
@@ -197,7 +197,7 @@ class Linear(AbstractLayerFactory):
 		return self.module, vector_x
 
 
-class Relu(AbstractLayerFactory):
+class Layer_Relu(AbstractLayerFactory):
 	
 	def get_name(self):
 		return "Relu"
@@ -208,9 +208,9 @@ class Relu(AbstractLayerFactory):
 	
 	def create_layer(self, vector_x):
 		return None, vector_x
-	
 
-class Softmax(AbstractLayerFactory):
+
+class Layer_Softmax(AbstractLayerFactory):
 	
 	def get_name(self):
 		return "Softmax"
@@ -302,7 +302,7 @@ class Transform_Flat(torch.nn.Module):
 		)
 
 
-def Flat(pos=1):
+def Layer_Flat(pos=1):
 	return Layer("Flat", Transform_Flat(pos))
 
 
@@ -318,7 +318,7 @@ class Transform_InsertFirstAxis(torch.nn.Module):
 	
 	
 
-def InsertFirstAxis():
+def Layer_InsertFirstAxis():
 	
 	"""
 	Insert first Axis for convolution layer
@@ -335,7 +335,7 @@ class Transform_MoveRGBToEnd(torch.nn.Module):
 		return t
 
 
-def MoveRGBToEnd():
+def Layer_MoveRGBToEnd():
 	return Layer("MoveRGBToEnd", Transform_MoveRGBToEnd())
 
 
@@ -347,7 +347,7 @@ class Transform_MoveRGBToBegin(torch.nn.Module):
 		return t
 
 
-def MoveRGBToBegin():
+def Layer_MoveRGBToBegin():
 	return Layer("MoveRGBToBegin", Transform_MoveRGBToBegin())
 		
 
@@ -367,7 +367,7 @@ class Transform_ToIntImage(torch.nn.Module):
 		return t
 
 
-def ToIntImage():
+def Layer_ToIntImage():
 	return Layer("ToIntImage", Transform_ToIntImage())
 
 
@@ -386,7 +386,7 @@ class Transform_ToFloatImage(torch.nn.Module):
 		return t
 
 
-def ToFloatImage():
+def Layer_ToFloatImage():
 	return Layer("ToFloatImage", Transform_ToFloatImage())
 
 
@@ -419,7 +419,7 @@ class Transform_ResizeImage(torch.nn.Module):
 			self.size, self.contain, self.color
 		)
 	
-def ResizeImage(size, contain=True, color=None):
+def Layer_ResizeImage(size, contain=True, color=None):
 	return Layer("ResizeImage", Transform_ResizeImage(size, contain=contain, color=color))
 
 
@@ -447,7 +447,7 @@ class Transform_NormalizeImage(torch.nn.Module):
 			self.mean, self.std, self.inplace
 		)
 	
-def NormalizeImage(mean, std, inplace=False):
+def Layer_NormalizeImage(mean, std, inplace=False):
 	import torchvision
 	return Layer("NormalizeImage",
 		torchvision.transforms.Normalize(mean=mean, std=std, inplace=inplace)

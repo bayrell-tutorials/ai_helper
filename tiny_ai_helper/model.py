@@ -131,19 +131,6 @@ class Model(torch.nn.Module):
 		return file_path
 	
 	
-	def get_optimizer_file_path(self, epoch_number=None):
-		
-		"""
-		Returns optimizer file_path
-		"""
-		
-		epoch_number = self._history.epoch_number
-		file_path = os.path.join( self.get_model_path(), "model-" +
-			str(epoch_number) + "-optimizer.data" )
-		
-		return file_path
-	
-	
 	def set_model_path(self, path):
 		
 		"""
@@ -207,22 +194,6 @@ class Model(torch.nn.Module):
 		
 		model = self.to(tensor_device)
 		summary(model, tuple(self._input_shape), device=str(tensor_device))
-	
-	
-	def check_answer_batch(self, **kwargs):
-		
-		"""
-		Check batch. Returns count right answers
-		"""
-		
-		batch_y = kwargs["batch_y"]
-		batch_predict = kwargs["batch_predict"]
-		
-		batch_y = torch.argmax(batch_y, dim=1)
-		batch_predict = torch.argmax(batch_predict, dim=1)
-		res = torch.sum( torch.eq(batch_y, batch_predict) ).item()
-		
-		return res
 	
 	
 	def predict(self, x, tensor_device=None):
@@ -345,6 +316,7 @@ class Model(torch.nn.Module):
 			model_name text NOT NULL,
 			epoch_number integer NOT NULL,
 			time real NOT NULL,
+			lr text NOT NULL,
 			acc_train real NOT NULL,
 			acc_test real NOT NULL,
 			acc_rel real NOT NULL,
@@ -390,7 +362,7 @@ class Model(torch.nn.Module):
 					train_count_iter, test_count_iter,
 					loss_train_iter, loss_test_iter,
 					acc_train_iter, acc_test_iter,
-					time, info
+					time, lr, info
 				) values
 				(
 					:model_name, :epoch_number, :acc_train,
@@ -399,7 +371,7 @@ class Model(torch.nn.Module):
 					:train_count_iter, :test_count_iter,
 					:loss_train_iter, :loss_test_iter,
 					:acc_train_iter, :acc_test_iter,
-					:time, :info
+					:time, :lr, :info
 				)
 			"""
 			
@@ -413,6 +385,7 @@ class Model(torch.nn.Module):
 				"loss_train": epoch_record["loss_train"],
 				"loss_test": epoch_record["loss_test"],
 				"time": epoch_record["time"],
+				"lr": epoch_record["lr"],
 				"batch_train_iter": epoch_record["batch_train_iter"],
 				"batch_test_iter": epoch_record["batch_test_iter"],
 				"train_count_iter": epoch_record["train_count_iter"],
@@ -454,6 +427,8 @@ class Model(torch.nn.Module):
 		
 		records = res.fetchall()
 		
+		self._history.clear()
+		
 		for record in records:
 			
 			if epoch_number is not None:
@@ -468,18 +443,19 @@ class Model(torch.nn.Module):
 		db_con.close()
 
 
-	def save_model_file(self, file_path):
+	def save_model_file(self, file_path, save_metricks={}):
 			
 		"""
 		Save model to file
 		"""
 		
-		state_dict = self.state_dict()
+		save_metricks["history"] = self._history.state_dict()
+		save_metricks["state_dict"] = self.state_dict()
 		make_parent_dir(file_path)
-		torch.save(state_dict, file_path)
+		torch.save(save_metricks, file_path)
 	
 	
-	def save(self, save_epoch=False):
+	def save(self, save_epoch=False, save_metricks={}):
 		
 		"""
 		Save model
@@ -491,7 +467,7 @@ class Model(torch.nn.Module):
 		if save_epoch:
 			epoch_number = self._history.epoch_number
 			file_path = self.get_model_file_path(epoch_number)
-			self.save_model_file(file_path)
+			self.save_model_file(file_path, save_metricks)
 		
 		self.save_train_status()
 
@@ -534,20 +510,20 @@ class Model(torch.nn.Module):
 		Load model
 		"""
 		
-		state_dict = None
+		save_metricks = None
 		
-		try:
-			if os.path.isfile(file_path):
-				state_dict = torch.load(file_path)
+		if os.path.isfile(file_path):
+			save_metricks = torch.load(file_path)
 		
-		except:
-			pass
+		if save_metricks is not None:
+			
+			if "state_dict" in save_metricks:
+				self.load_state_dict(save_metricks["state_dict"])
+			
+			if "history" in save_metricks:
+				self._history.load_state_dict(save_metricks["history"])
 		
-		if state_dict:
-			self.load_state_dict(state_dict)
-			return True
-		
-		return False
+		return save_metricks
 	
 	
 	def load(self, model_path=None, repository_path=None, file_path=None, epoch_number=None):
@@ -556,56 +532,27 @@ class Model(torch.nn.Module):
 		Load model from file
 		"""
 		
+		self._history.clear()
+		
 		if repository_path is not None:
 			self.set_repository_path(repository_path)
 		
 		if model_path is not None:
 			self.set_model_path(model_path)
 		
+		if file_path is None and epoch_number is None:
+			self.load_train_status(epoch_number)
+			epoch_number = self._history.epoch_number
+		
 		if file_path is None:
 			file_path = self.get_model_file_path(epoch_number)
+			if not os.path.isfile(file_path):
+				file_path = self.get_model_file_path()
 		
-		is_loaded = self.load_model_file(file_path)
+		save_metricks = self.load_model_file(file_path)
 		
-		if is_loaded:
-			self.load_train_status(epoch_number)
+		return save_metricks
 	
-	
-	def save_optimizer(self, optimizer, file_path=None):
-		
-		"""
-		Save optimizer
-		"""
-		
-		if file_path is None:
-			epoch_number = self._history.epoch_number
-			file_path = self.get_optimizer_file_path(epoch_number)
-		
-		make_parent_dir(file_path)
-		torch.save(optimizer.state_dict(), file_path)
-	
-
-	def load_optimizer(self, optimizer, file_path=None):
-		
-		"""
-		Load optimizer
-		"""
-		
-		if file_path is None:
-			epoch_number = self._history.epoch_number
-			file_path = self.get_optimizer_file_path(epoch_number)
-		
-		state_dict = None
-		if os.path.isfile(file_path):
-			try:
-				if os.path.isfile(file_path):
-					state_dict = torch.load(file_path)
-			except:
-				pass
-		
-		if state_dict:
-			optimizer.load_state_dict(state_dict)
-
 
 class PreparedModel(torch.nn.Module):
 	
@@ -635,24 +582,27 @@ class PreparedModel(torch.nn.Module):
 		self.model.load_state_dict( state_dict )
 
 
-class ExtendModule(torch.nn.Module):
+class ExtendModel(Model):
 	
-	def __init__(self, model):
+	def __init__(self, *args, **kwargs):
 		
 		"""
 		Constructor
 		"""
 		
-		super(ExtendModule, self).__init__()
+		super(ExtendModel, self).__init__(*args, **kwargs)
 		
 		self._layers = []
 		self._shapes = []
-		self._input_shape = kwargs["input_shape"] if "input_shape" in kwargs else (1)
-		self._output_shape = kwargs["output_shape"] if "output_shape" in kwargs else (1)
-		self._layers = kwargs["layers"] if "layers" in kwargs else None
 		
-		if self._layers is not None:
-			self.init_layers(self._layers)
+		if "input_shape" in kwargs:
+			self._input_shape = kwargs["input_shape"]
+		
+		if "output_shape" in kwargs:
+			self._output_shape = kwargs["output_shape"]
+		
+		if "layers" in kwargs:
+			self.init_layers(kwargs["layers"])
 		
 	
 	def forward(self, x):
@@ -672,16 +622,18 @@ class ExtendModule(torch.nn.Module):
 		return x
 	
 	
-	def init_layers(self, layers=[], debug=False):
+	def init_layers(self, layers=None):
 		
 		"""
 		Init layers
 		"""
 		
 		self._layers = layers
+		if self._layers is None:
+			return
 		
-		input_shape = self.input_shape
-		output_shape = self.output_shape
+		input_shape = self._input_shape
+		output_shape = self._output_shape
 		
 		arr = list(input_shape)
 		arr.insert(0, 1)
@@ -689,7 +641,7 @@ class ExtendModule(torch.nn.Module):
 		vector_x = torch.zeros( tuple(arr) )
 		self._shapes.append( ("Input", vector_x.shape) )
 		
-		if debug:
+		if self._is_debug:
 			print ("Input:" + " " + str( tuple(vector_x.shape) ))
 		
 		index = 1
@@ -711,7 +663,7 @@ class ExtendModule(torch.nn.Module):
 				
 				self._shapes.append( (layer_name, vector_x.shape) )
 				
-				if debug:
+				if self._is_debug:
 					print (layer_name + " => " + str(tuple(vector_x.shape)))
 				
 				if layer:
@@ -723,3 +675,4 @@ class ExtendModule(torch.nn.Module):
 				
 				layer_name = str( index ) + "_Layer"
 				self.add_module(layer_name, obj)
+
