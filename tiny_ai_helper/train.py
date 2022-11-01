@@ -370,7 +370,7 @@ class TrainShedulerCallback:
 		self.scheduler = None
 	
 	
-	def save_metricks(self, trainer, metricks):
+	def save_metrics(self, trainer, metricks):
 		
 		"""
 		Save metricks
@@ -434,21 +434,23 @@ class TrainSaveCallback:
 		return file_type, epoch_index
 	
 	
-	def save_epoch_indexes(self, model, epoch_indexes):
+	def save_epoch_indexes(self, model, model_path, epoch_indexes):
 		
 		"""
 		Save epoch by indexes
 		"""
 		
-		model_path = model.get_model_path()
-		files = list_files( model_path )
+		model_path = model_path.model_name( model.get_model_name() )
+		file_path = model_path.get_model_file_path()
+		dir_name = os.path.dirname(file_path)
+		files = list_files( dir_name )
 		
 		for file_name in files:
 			
 			file_type, epoch_index = self.detect_type(file_name)
 			if file_type in ["model", "optimizer"] and not (epoch_index in epoch_indexes):
 				
-				file_path = os.path.join( model_path, file_name )
+				file_path = os.path.join( dir_name, file_name )
 				os.unlink(file_path)
 				
 	
@@ -492,7 +494,7 @@ class TrainSaveCallback:
 		return res_indexes
 	
 	
-	def save_the_best_epoch(self, model, epoch_count=5):
+	def save_the_best_epoch(self, model, model_path, epoch_count=5):
 		
 		"""
 		Save the best models
@@ -503,7 +505,7 @@ class TrainSaveCallback:
 			epoch_indexes = self.get_the_best_epoch(model, epoch_count, indexes=True)
 			epoch_indexes.append( model._history.epoch_number )
 			
-			self.save_epoch_indexes(model, epoch_indexes)
+			self.save_epoch_indexes(model, model_path, epoch_indexes)
 	
 	
 	def on_start_train(self, trainer):
@@ -513,17 +515,16 @@ class TrainSaveCallback:
 		"""
 		
 		if trainer.load_model:
-			save_metricks = trainer.model.load(
-				epoch_number=trainer.load_epoch,
-				file_path=trainer.load_file_path,
+			save_metrics = trainer.model.load(
+				model_path=trainer.model_path,
 			)
 			
-			if save_metricks is not None and "optimizer" in save_metricks:
-				trainer.optimizer.load_state_dict(save_metricks["optimizer"])
+			if save_metrics is not None and "optimizer" in save_metrics:
+				trainer.optimizer.load_state_dict(save_metrics["optimizer"])
 			
 			for callback in trainer.callbacks:
 				if hasattr(callback, "load_metricks"):
-					callback.load_metricks(trainer, save_metricks)
+					callback.load_metricks(trainer, save_metrics)
 					
 			trainer.train_status.set_model(trainer.model)
 			
@@ -535,18 +536,23 @@ class TrainSaveCallback:
 		On epoch end
 		"""
 		
-		save_metricks = {
+		save_metrics = {
 			"optimizer": trainer.optimizer.state_dict(),
 			"optimizer_name": get_class_name(trainer.optimizer),
 		}
 		
 		for callback in trainer.callbacks:
-			if hasattr(callback, "save_metricks"):
-				callback.save_metricks(trainer, save_metricks)
+			if hasattr(callback, "save_metrics"):
+				callback.save_metrics(trainer, save_metrics)
+		
+		model_path = trainer.model_path
+		model_path = model_path.file_name( "" )
+		model_path = model_path.file_path( "" )
 		
 		trainer.model.save(
+			model_path=model_path,
 			save_epoch=trainer.save_epoch,
-			save_metricks=save_metricks,
+			save_metrics=save_metrics,
 		)
 		
 		if trainer.save_epoch:
@@ -555,7 +561,8 @@ class TrainSaveCallback:
 			Save best epoch
 			"""
 			self.save_the_best_epoch(
-				trainer.model,
+				model=trainer.model,
+				model_path=trainer.model_path,
 				epoch_count=trainer.save_epoch_count
 			)
 		
@@ -575,9 +582,6 @@ class TrainCheckIsTrainedCallback:
 		loss_test = trainer.train_status.get_loss_test()
 		
 		if epoch_number >= trainer.max_epochs:
-			return True
-		
-		if acc_rel > trainer.max_acc_rel and acc_train > 0.8:
 			return True
 		
 		if loss_test < trainer.min_loss_test and epoch_number >= trainer.min_epochs:
@@ -618,12 +622,11 @@ class Trainer:
 		self.num_workers = os.cpu_count()
 		
 		self.load_model = kwargs["load_model"] if "load_model" in kwargs else True
-		self.load_epoch = kwargs["load_epoch"] if "load_epoch" in kwargs else None
-		self.load_file_path = kwargs["load_file_path"] if "load_file_path" in kwargs else None
+		self.model_path = kwargs["model_path"] if "model_path" in kwargs else None
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 5e-4
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 1e-4
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
@@ -824,7 +827,7 @@ class Trainer:
 		if self.check_is_trained():
 			return
 		
-		print ("Train model " + str(model._model_name))
+		print ("Train model " + str(model.get_model_name()))
 		
 		try:
 		
