@@ -354,9 +354,9 @@ class TrainVerboseCallback:
 			epoch_number = trainer.train_status.epoch_number,
 			loss_train = loss_train,
 			loss_test = loss_test,
-			acc_train = str(round(acc_train * 100)).zfill(2),
-			acc_test = str(round(acc_test * 100)).zfill(2),
-			acc_rel = str(round(acc_rel * 100) / 100).ljust(4, "0"),
+			acc_train = str(round(acc_train * 10000)).zfill(4),
+			acc_test = str(round(acc_test * 10000)).zfill(4),
+			acc_rel = str(round(acc_rel * 10000) / 10000).ljust(6, "0"),
 			time = str(round(time)),
 			lr = str(res_lr),
 		)
@@ -623,7 +623,7 @@ class Trainer:
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 2e-4
+		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 5e-4
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		

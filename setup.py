@@ -11,7 +11,7 @@ from os.path import abspath, dirname, join
 
 setup(
 	name="tiny_ai_helper",
-	version="0.0.12",
+	version="0.0.13",
 	description="Tiny AI Helper for PyTorch",
 	long_description=open(join(abspath(dirname(__file__)), 'README.md'), encoding='utf-8').read(),
 	long_description_content_type='text/markdown',
