@@ -100,8 +100,8 @@ def init_tensorflow_gpu(memory_limit=1024):
 	gpus = tf.config.list_physical_devices('GPU')
 	tf.config.experimental.set_memory_growth(gpus[0], True)
 	tf.config.experimental.set_virtual_device_configuration(
-	    gpus[0],
-	    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=memory_limit)])
+		gpus[0],
+		[tf.config.experimental.VirtualDeviceConfiguration(memory_limit=memory_limit)])
 
 
 
@@ -386,3 +386,28 @@ def get_class_name(obj):
 	"""
 	
 	return type(obj).__module__ + '.' + type(obj).__name__
+
+
+def create_pyplot_figure():
+	
+	"""
+	Returns new pyplot figure instance
+	"""
+	import matplotlib
+	return matplotlib.figure.Figure()
+
+	
+def get_pyplot_image(figure):
+	
+	"""
+	Returns pyplot image
+	"""
+	
+	from PIL import Image
+	from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+	ag = figure.canvas.switch_backends(FigureCanvasAgg)
+	ag.draw()
+
+	img = Image.fromarray( np.asarray(ag.buffer_rgba()) )
+	return img

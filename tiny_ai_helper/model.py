@@ -100,12 +100,6 @@ class Model(torch.nn.Module):
 		if self._convert_batch is not None:
 			return self._convert_batch(self, x=x, y=y)
 		
-		if x is not None:
-			x = x.to(torch.float)
-		
-		if y is not None:
-			y = y.to(torch.float)
-		
 		return x, y
 			
 	
@@ -197,20 +191,39 @@ class Model(torch.nn.Module):
 		"""
 		Save train history
 		"""
-		plt = self._history.get_plot()
 		
 		if model_path is not None:
-			model_path = model_path.model_name(self.get_model_name())
-			file_path = model_path.get_model_file_path()
+			
+			file_path = model_path.model_name(self.get_model_name()).get_model_file_path()
 			dir_name = os.path.dirname(file_path)
-			history_image = os.path.join( dir_name , "model.png" )
-			make_parent_dir(history_image)
-			plt.savefig(history_image)
-		
-		if show:
-			plt.show()
-		
-		return plt
+			make_parent_dir(dir_name)
+			
+			# Save loss metrics
+			f = create_pyplot_figure()
+			ax = f.gca()
+			self._history.plot(ax, "loss")
+			
+			file_path = os.path.join( dir_name, "model_loss.png" )
+			get_pyplot_image(f).save(file_path)
+			
+			# Save val metrics
+			f = create_pyplot_figure()
+			ax = f.gca()
+			self._history.plot(ax, "acc")
+			
+			file_path = os.path.join( dir_name, "model_acc.png" )
+			get_pyplot_image(f).save(file_path)
+			
+			# Show image
+			if show:
+				f = create_pyplot_figure()
+				ax = f.subplots(2)
+				
+				self._history.plot(ax[0], "loss")
+				self._history.plot(ax[1], "acc")
+				
+				get_pyplot_image(f).show()
+			
 	
 	
 	def save(self, model_path=None, save_epoch=False, save_metrics={}):

@@ -152,34 +152,32 @@ class TrainHistory:
 				res.append( epoch[metric_name] if metric_name in epoch else 0 )
 		
 		return res
-		
 	
-	def get_plot(self):
+	
+	def plot(self, ax, kind=""):
 		
 		"""
 		Returns train history
 		"""
 		
-		import matplotlib.pyplot as plt
 		import numpy as np
 		
-		loss_train = self.get_metrics("loss_train")
-		loss_val = self.get_metrics("loss_val")
-		acc_train = self.get_metrics("acc_train")
-		acc_val = self.get_metrics("acc_val")
+		if kind == "loss":
+			loss_train = self.get_metrics("loss_train")
+			loss_val = self.get_metrics("loss_val")
+			
+			ax.plot( np.multiply(loss_train, 100), label='loss_train')
+			ax.plot( np.multiply(loss_val, 100), label='loss_val')
+			ax.legend()
 		
-		#fig, axs = plt.subplots(2)
-		plt.plot( np.multiply(loss_train, 100), label='loss_train')
-		plt.plot( np.multiply(loss_val, 100), label='loss_val')
-		plt.legend()
-		"""
-		axs[1].plot( np.multiply(acc_train, 100), label='train acc')
-		axs[1].plot( np.multiply(acc_val, 100), label='test acc')
-		axs[1].legend()
-		"""
-		plt.xlabel('Epoch')
+		if kind == "acc":
+			acc_train = self.get_metrics("acc_train")
+			acc_val = self.get_metrics("acc_val")
+			
+			ax.plot( np.multiply(acc_train, 100), label='acc_train')
+			ax.plot( np.multiply(acc_val, 100), label='acc_val')
+			ax.legend()
 		
-		return plt
 	
 
 class TrainStatus:
@@ -288,19 +286,24 @@ class TrainStatus:
 
 class TrainAccuracyCallback:
 	
-	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
+	def get_acc(self, batch_y, batch_predict):
 		
 		batch_y = torch.argmax(batch_y, dim=1)
 		batch_predict = torch.argmax(batch_predict, dim=1)
 		acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+		
+		return acc
+	
+	
+	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
+		
+		acc = self.get_acc(batch_y, batch_predict)
 		trainer.train_status.acc_train_iter = trainer.train_status.acc_train_iter + acc
 	
 	
 	def on_end_batch_test(self, trainer, batch_x, batch_y, batch_predict, loss):
 		
-		batch_y = torch.argmax(batch_y, dim=1)
-		batch_predict = torch.argmax(batch_predict, dim=1)
-		acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+		acc = self.get_acc(batch_y, batch_predict)
 		trainer.train_status.acc_val_iter = trainer.train_status.acc_val_iter + acc
 	
 
@@ -625,7 +628,7 @@ class Trainer:
 		self.train_status.trainer = self
 		
 		self.train_loader = None
-		self.test_loader = None
+		self.val_loader = None
 		self.train_dataset = None
 		self.val_dataset = None
 		self.batch_size = 64
@@ -655,10 +658,10 @@ class Trainer:
 			self.optimizer = kwargs["optimizer"]
 		
 		if "loss" in kwargs:
-			self.optimizer = kwargs["loss"]
+			self.loss = kwargs["loss"]
 		
 		if "num_workers" in kwargs:
-			self.optimizer = kwargs["num_workers"]
+			self.num_workers = kwargs["num_workers"]
 		
 		if "callbacks" in kwargs:
 			self.callbacks = kwargs["callbacks"]
@@ -817,8 +820,8 @@ class Trainer:
 				shuffle=True
 			)
 		
-		if self.test_loader is None and self.val_dataset is not None:
-			self.test_loader = DataLoader(
+		if self.val_loader is None and self.val_dataset is not None:
+			self.val_loader = DataLoader(
 				self.val_dataset,
 				num_workers=self.num_workers,
 				batch_size=self.batch_size,
@@ -886,8 +889,8 @@ class Trainer:
 				
 				module.eval()
 				
-				# Test batch
-				for batch_x, batch_y in self.test_loader:
+				# val batch
+				for batch_x, batch_y in self.val_loader:
 					
 					batch_x = batch_x.to(tensor_device)
 					batch_y = batch_y.to(tensor_device)
