@@ -5,10 +5,10 @@
 # License: MIT
 ##
 
-from .model import Model, ExtendModel, PreparedModel, CustomModel
-from .train import TrainStatus, TrainVerboseCallback, do_train
+from .model import Model, ExtendModel, PreparedModel, CustomModel, ModelPath
+from .train import TrainStatus, TrainVerboseCallback, train
 
-__version__ = "0.0.13"
+__version__ = "0.0.14"
 
 __all__ = (
 	
@@ -16,8 +16,9 @@ __all__ = (
 	"ExtendModel",
 	"PreparedModel",
 	"CustomModel",
+	"ModelPath",
 	"TrainStatus",
 	"TrainVerboseCallback",
-	"do_train",
+	"train",
 	
 )

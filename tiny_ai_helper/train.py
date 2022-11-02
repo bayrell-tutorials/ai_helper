@@ -63,20 +63,20 @@ class TrainHistory:
 		self.epoch[epoch_number] = {
 			
 			"loss_train": record["loss_train"],
-			"loss_test": record["loss_test"],
+			"loss_val": record["loss_val"],
 			"acc_train": record["acc_train"],
-			"acc_test": record["acc_test"],
+			"acc_val": record["acc_val"],
 			"acc_rel": record["acc_rel"],
 			"time": record["time"],
 			"lr": record["lr"],
 			"batch_train_iter": record["batch_train_iter"],
-			"batch_test_iter": record["batch_test_iter"],
-			"train_count_iter": record["train_count_iter"],
-			"test_count_iter": record["test_count_iter"],
+			"batch_val_iter": record["batch_val_iter"],
+			"count_train_iter": record["count_train_iter"],
+			"count_val_iter": record["count_val_iter"],
 			"loss_train_iter": record["loss_train_iter"],
-			"loss_test_iter": record["loss_test_iter"],
+			"loss_val_iter": record["loss_val_iter"],
 			"acc_train_iter": record["acc_train_iter"],
-			"acc_test_iter": record["acc_test_iter"],
+			"acc_val_iter": record["acc_val_iter"],
 			
 		}
 	
@@ -88,9 +88,9 @@ class TrainHistory:
 		"""
 		
 		loss_train = train_status.get_loss_train()
-		loss_test = train_status.get_loss_test()
+		loss_val = train_status.get_loss_val()
 		acc_train = train_status.get_acc_train()
-		acc_test = train_status.get_acc_test()
+		acc_val = train_status.get_acc_val()
 		acc_rel = train_status.get_acc_rel()
 		time = train_status.get_time()
 		lr = train_status.get_lr()
@@ -99,20 +99,20 @@ class TrainHistory:
 			
 			"epoch_number": train_status.epoch_number,
 			"loss_train": loss_train,
-			"loss_test": loss_test,
+			"loss_val": loss_val,
 			"acc_train": acc_train,
-			"acc_test": acc_test,
+			"acc_val": acc_val,
 			"acc_rel": acc_rel,
 			"time": time,
 			"lr": json.dumps(lr),
 			"batch_train_iter": train_status.batch_train_iter,
-			"batch_test_iter": train_status.batch_test_iter,
-			"train_count_iter": train_status.train_count_iter,
-			"test_count_iter": train_status.test_count_iter,
+			"batch_val_iter": train_status.batch_val_iter,
+			"count_train_iter": train_status.count_train_iter,
+			"count_val_iter": train_status.count_val_iter,
 			"loss_train_iter": train_status.loss_train_iter,
-			"loss_test_iter": train_status.loss_test_iter,
+			"loss_val_iter": train_status.loss_val_iter,
 			"acc_train_iter": train_status.acc_train_iter,
-			"acc_test_iter": train_status.acc_test_iter,
+			"acc_val_iter": train_status.acc_val_iter,
 			
 		} )
 	
@@ -137,16 +137,19 @@ class TrainHistory:
 		
 		res = []
 		for index in self.epoch:
+			
+			epoch = self.get_epoch(index)
+			
 			if with_index:
 				if isinstance(metric_name, list):
 					res2 = [ index ]
 					for name in metric_name:
-						res2.append( self.epoch[index][name] )
+						res2.append( epoch[name] if name in epoch else 0 )
 					res.append( tuple(res2) )
 				else:
-					res.append( (index, self.epoch[index][metric_name]) )
+					res.append( (index, epoch[metric_name] if metric_name in epoch else 0) )
 			else:
-				res.append( self.epoch[index][metric_name] )
+				res.append( epoch[metric_name] if metric_name in epoch else 0 )
 		
 		return res
 		
@@ -161,17 +164,19 @@ class TrainHistory:
 		import numpy as np
 		
 		loss_train = self.get_metrics("loss_train")
-		loss_test = self.get_metrics("loss_test")
+		loss_val = self.get_metrics("loss_val")
 		acc_train = self.get_metrics("acc_train")
-		acc_test = self.get_metrics("acc_test")
+		acc_val = self.get_metrics("acc_val")
 		
-		fig, axs = plt.subplots(2)
-		axs[0].plot( np.multiply(loss_train, 100), label='train loss')
-		axs[0].plot( np.multiply(loss_test, 100), label='test loss')
-		axs[0].legend()
+		#fig, axs = plt.subplots(2)
+		plt.plot( np.multiply(loss_train, 100), label='loss_train')
+		plt.plot( np.multiply(loss_val, 100), label='loss_val')
+		plt.legend()
+		"""
 		axs[1].plot( np.multiply(acc_train, 100), label='train acc')
-		axs[1].plot( np.multiply(acc_test, 100), label='test acc')
+		axs[1].plot( np.multiply(acc_val, 100), label='test acc')
 		axs[1].legend()
+		"""
 		plt.xlabel('Epoch')
 		
 		return plt
@@ -183,13 +188,13 @@ class TrainStatus:
 		self.model = None
 		self.batch_size = 0
 		self.batch_train_iter = 0
-		self.batch_test_iter = 0
-		self.train_count_iter = 0
-		self.test_count_iter = 0
+		self.batch_val_iter = 0
+		self.count_train_iter = 0
+		self.count_val_iter = 0
 		self.loss_train_iter = 0
-		self.loss_test_iter = 0
+		self.loss_val_iter = 0
 		self.acc_train_iter = 0
-		self.acc_test_iter = 0
+		self.acc_val_iter = 0
 		self.epoch_number = 0
 		self.trainer = None
 		self.do_training = True
@@ -207,64 +212,64 @@ class TrainStatus:
 			
 			record = model._history.get_epoch(self.epoch_number)
 			
-			self.batch_train_iter = record["batch_train_iter"]
-			self.batch_test_iter = record["batch_test_iter"]
-			self.train_count_iter = record["train_count_iter"]
-			self.test_count_iter = record["test_count_iter"]
-			self.loss_train_iter = record["loss_train_iter"]
-			self.loss_test_iter = record["loss_test_iter"]
-			self.acc_train_iter = record["acc_train_iter"]
-			self.acc_test_iter = record["acc_test_iter"]
+			self.batch_train_iter = record["batch_train_iter"] if "batch_train_iter" in record else 0
+			self.batch_val_iter = record["batch_val_iter"] if "batch_val_iter" in record else 0
+			self.count_train_iter = record["count_train_iter"] if "count_train_iter" in record else 0
+			self.count_val_iter = record["count_val_iter"] if "count_val_iter" in record else 0
+			self.loss_train_iter = record["loss_train_iter"] if "loss_train_iter" in record else 0
+			self.loss_val_iter = record["loss_val_iter"] if "loss_val_iter" in record else 0
+			self.acc_train_iter = record["acc_train_iter"] if "acc_train_iter" in record else 0
+			self.acc_val_iter = record["acc_val_iter"] if "acc_val_iter" in record else 0
 	
 	def clear(self):
 		self.clear_iter()
 	
 	def clear_iter(self):
 		self.batch_train_iter = 0
-		self.batch_test_iter = 0
-		self.train_count_iter = 0
-		self.test_count_iter = 0
+		self.batch_val_iter = 0
+		self.count_train_iter = 0
+		self.count_val_iter = 0
 		self.loss_train_iter = 0
-		self.loss_test_iter = 0
+		self.loss_val_iter = 0
 		self.acc_train_iter = 0
-		self.acc_test_iter = 0
+		self.acc_val_iter = 0
 	
 	def get_iter_value(self):
 		if self.train_data_count == 0:
 			return 0
-		return self.train_count_iter / self.train_data_count
+		return (self.count_train_iter + self.count_val_iter) / self.train_data_count
 	
 	def get_loss_train(self):
 		if self.batch_train_iter == 0:
 			return 0
 		return self.loss_train_iter / self.batch_train_iter
 	
-	def get_loss_test(self):
-		if self.batch_test_iter == 0:
+	def get_loss_val(self):
+		if self.batch_val_iter == 0:
 			return 0
-		return self.loss_test_iter / self.batch_test_iter
+		return self.loss_val_iter / self.batch_val_iter
 	
 	def get_acc_train(self):
-		if self.train_count_iter == 0:
+		if self.count_train_iter == 0:
 			return 0
-		return self.acc_train_iter / self.train_count_iter
+		return self.acc_train_iter / self.count_train_iter
 	
-	def get_acc_test(self):
-		if self.test_count_iter == 0:
+	def get_acc_val(self):
+		if self.count_val_iter == 0:
 			return 0
-		return self.acc_test_iter / self.test_count_iter
+		return self.acc_val_iter / self.count_val_iter
 	
 	def get_acc_rel(self):
 		acc_train = self.get_acc_train()
-		acc_test = self.get_acc_test()
-		if acc_test == 0:
+		acc_val = self.get_acc_val()
+		if acc_val == 0:
 			return 0
-		return acc_train / acc_test
+		return acc_train / acc_val
 	
 	def get_loss_rel(self):
-		if self.loss_test == 0:
+		if self.loss_val == 0:
 			return 0
-		return self.loss_train / self.loss_test
+		return self.loss_train / self.loss_val
 	
 	def stop_train(self):
 		self.do_training = False
@@ -296,13 +301,12 @@ class TrainAccuracyCallback:
 		batch_y = torch.argmax(batch_y, dim=1)
 		batch_predict = torch.argmax(batch_predict, dim=1)
 		acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
-		trainer.train_status.acc_test_iter = trainer.train_status.acc_test_iter + acc
+		trainer.train_status.acc_val_iter = trainer.train_status.acc_val_iter + acc
 	
 
 class TrainVerboseCallback:
 	
-	
-	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
+	def print_train(self, trainer, batch_x, batch_y, batch_predict, loss):
 		
 		acc_train = trainer.train_status.get_acc_train()
 		loss_train = trainer.train_status.get_loss_train()
@@ -321,6 +325,16 @@ class TrainVerboseCallback:
 		)
 		
 		print (msg, end='')
+		
+	
+	def on_end_batch_test(self, trainer, batch_x, batch_y, batch_predict, loss):
+		
+		self.print_train(trainer, batch_x, batch_y, batch_predict, loss)
+	
+	
+	def on_end_batch_train(self, trainer, batch_x, batch_y, batch_predict, loss):
+		
+		self.print_train(trainer, batch_x, batch_y, batch_predict, loss)
 	
 	
 	def on_end_epoch(self, trainer):
@@ -330,32 +344,32 @@ class TrainVerboseCallback:
 		"""
 		
 		loss_train = trainer.train_status.get_loss_train()
-		loss_test = trainer.train_status.get_loss_test()
+		loss_val = trainer.train_status.get_loss_val()
 		acc_train = trainer.train_status.get_acc_train()
-		acc_test = trainer.train_status.get_acc_test()
+		acc_val = trainer.train_status.get_acc_val()
 		acc_rel = trainer.train_status.get_acc_rel()
 		time = trainer.train_status.get_time()
 		res_lr = trainer.train_status.get_lr()
 		
 		loss_train = '%.3e' % loss_train
-		loss_test = '%.3e' % loss_test
+		loss_val = '%.3e' % loss_val
 		
 		print ("\r", end='')
 		
 		msg = ("Step {epoch_number}, " +
 			"acc: .{acc_train}, " +
-			"acc_test: .{acc_test}, " +
+			"acc_val: .{acc_val}, " +
 			"acc_rel: {acc_rel}, " +
 			"loss: {loss_train}, " +
-			"loss_test: {loss_test}, " +
+			"loss_val: {loss_val}, " +
 			"lr: {lr}, " +
 			"time: {time}s "
 		).format(
 			epoch_number = trainer.train_status.epoch_number,
 			loss_train = loss_train,
-			loss_test = loss_test,
+			loss_val = loss_val,
 			acc_train = str(round(acc_train * 10000)).zfill(4),
-			acc_test = str(round(acc_test * 10000)).zfill(4),
+			acc_val = str(round(acc_val * 10000)).zfill(4),
 			acc_rel = str(round(acc_rel * 10000) / 10000).ljust(6, "0"),
 			time = str(round(time)),
 			lr = str(res_lr),
@@ -409,8 +423,8 @@ class TrainShedulerCallback:
 		"""
 		
 		if self.scheduler is not None:
-			loss_test = trainer.train_status.get_loss_test()
-			self.scheduler.step(loss_test)
+			loss_val = trainer.train_status.get_loss_val()
+			self.scheduler.step(loss_val)
 	
 
 class TrainSaveCallback:
@@ -461,7 +475,7 @@ class TrainSaveCallback:
 		Returns teh best epoch
 		"""
 		
-		metrics = model._history.get_metrics(["loss_test", "acc_rel"], with_index=True)
+		metrics = model._history.get_metrics(["loss_val", "acc_rel"], with_index=True)
 		
 		def get_key(item):
 			return [item[1], item[2]]
@@ -471,15 +485,15 @@ class TrainSaveCallback:
 		res = []
 		res_count = 0
 		metrics_len = len(metrics)
-		loss_test_last = 100
+		loss_val_last = 100
 		for index in range(metrics_len):
 			
 			res.append( metrics[index] )
 			
-			if loss_test_last != metrics[index][1]:
+			if loss_val_last != metrics[index][1]:
 				res_count = res_count + 1
 			
-			loss_test_last = metrics[index][1]
+			loss_val_last = metrics[index][1]
 			
 			if res_count > epoch_count:
 				break
@@ -577,14 +591,14 @@ class TrainCheckIsTrainedCallback:
 		
 		epoch_number = trainer.train_status.epoch_number
 		acc_train = trainer.train_status.get_acc_train()
-		acc_test = trainer.train_status.get_acc_test()
+		acc_val = trainer.train_status.get_acc_val()
 		acc_rel = trainer.train_status.get_acc_rel()
-		loss_test = trainer.train_status.get_loss_test()
+		loss_val = trainer.train_status.get_loss_val()
 		
 		if epoch_number >= trainer.max_epochs:
 			return True
 		
-		if loss_test < trainer.min_loss_test and epoch_number >= trainer.min_epochs:
+		if loss_val < trainer.min_loss_val and epoch_number >= trainer.min_epochs:
 			return True
 		
 		return False
@@ -613,7 +627,7 @@ class Trainer:
 		self.train_loader = None
 		self.test_loader = None
 		self.train_dataset = None
-		self.test_dataset = None
+		self.val_dataset = None
 		self.batch_size = 64
 		
 		self.optimizer = None
@@ -626,12 +640,12 @@ class Trainer:
 		self.max_epochs = kwargs["max_epochs"] if "max_epochs" in kwargs else 50
 		self.min_epochs = kwargs["min_epochs"] if "min_epochs" in kwargs else 3
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
-		self.min_loss_test = kwargs["min_loss_test"] if "min_loss_test" in kwargs else 1e-4
+		self.min_loss_val = kwargs["min_loss_val"] if "min_loss_val" in kwargs else -1
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
 		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
-		self.test_dataset = kwargs["test_dataset"] if "test_dataset" in kwargs else False
+		self.val_dataset = kwargs["val_dataset"] if "val_dataset" in kwargs else False
 		self.tensor_device = kwargs["tensor_device"] if "tensor_device" in kwargs else None
 		self.save_epoch = kwargs["save_epoch"] if "save_epoch" in kwargs else True
 		self.save_epoch_count = kwargs["save_epoch_count"] if "save_epoch_count" in kwargs else 5
@@ -803,9 +817,9 @@ class Trainer:
 				shuffle=True
 			)
 		
-		if self.test_loader is None and self.test_dataset is not None:
+		if self.test_loader is None and self.val_dataset is not None:
 			self.test_loader = DataLoader(
-				self.test_dataset,
+				self.val_dataset,
 				num_workers=self.num_workers,
 				batch_size=self.batch_size,
 				drop_last=False,
@@ -859,7 +873,7 @@ class Trainer:
 					# Save train status
 					train_status.batch_train_iter = train_status.batch_train_iter + 1
 					train_status.loss_train_iter = train_status.loss_train_iter + loss.data.item()
-					train_status.train_count_iter = train_status.train_count_iter + batch_x.shape[0]
+					train_status.count_train_iter = train_status.count_train_iter + batch_x.shape[0]
 					train_status.time_end = time.time()
 					
 					self.on_end_batch_train(batch_x, batch_y, batch_predict, loss)
@@ -889,9 +903,9 @@ class Trainer:
 					self.optimizer.step()
 					
 					# Save train status
-					train_status.batch_test_iter = train_status.batch_test_iter + 1
-					train_status.loss_test_iter = train_status.loss_test_iter + loss.data.item()
-					train_status.test_count_iter = train_status.test_count_iter + batch_x.shape[0]
+					train_status.batch_val_iter = train_status.batch_val_iter + 1
+					train_status.loss_val_iter = train_status.loss_val_iter + loss.data.item()
+					train_status.count_val_iter = train_status.count_val_iter + batch_x.shape[0]
 					train_status.time_end = time.time()
 					
 					self.on_end_batch_test(batch_x, batch_y, batch_predict, loss)
@@ -920,7 +934,7 @@ class Trainer:
 		self.on_end_train()
 	
 
-def do_train(model, *args, **kwargs):
+def train(model, *args, **kwargs):
 	
 	"""
 	Start training

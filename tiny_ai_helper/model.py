@@ -73,6 +73,24 @@ class Model(torch.nn.Module):
 		return self._model_name
 	
 	
+	def get_epoch_number(self):
+		
+		"""
+		Returns epoch number
+		"""
+		
+		return self._history.epoch_number
+	
+	
+	def get_epoch(self, epoch_number):
+		
+		"""
+		Returns epoch by index
+		"""
+		
+		return self._history.get_epoch(epoch_number)
+	
+	
 	def convert_batch(self, x=None, y=None):
 		
 		"""
@@ -91,7 +109,7 @@ class Model(torch.nn.Module):
 		return x, y
 			
 	
-	def summary(self, verbose=True, tensor_device=None):
+	def summary(self, verbose=True, device=None):
 		
 		"""
 		Show model summary
@@ -99,11 +117,11 @@ class Model(torch.nn.Module):
 		
 		print ("Model name: " + self.get_model_name())
 		
-		if tensor_device is None:
-			tensor_device = get_tensor_device()
+		if device is None:
+			device = get_tensor_device()
 		
-		model = self.to(tensor_device)
-		summary(model, tuple(self._input_shape), device=str(tensor_device))
+		model = self.to(device)
+		summary(model, tuple(self._input_shape), device=str(device))
 	
 	
 	def predict(self, x, tensor_device=None):
@@ -144,12 +162,12 @@ class Model(torch.nn.Module):
 		
 		res = torch.tensor([])
 		module = self.to(tensor_device)
-		count = len(dataset)
-		batch_iter = 0
+		count_total = len(dataset)
+		count_iter = 0
 		
 		module.eval()
 		
-		for batch_x, _ in loader:
+		for batch_x in loader:
 			
 			batch_x = batch_x.to(tensor_device)
 			
@@ -160,10 +178,10 @@ class Model(torch.nn.Module):
 			
 			res = torch.cat( (res, batch_predict) )
 			
-			batch_iter = batch_iter + 1
+			count_iter = count_iter + batch_x.shape[0]
 			
 			if progress is not None:
-				progress(batch_iter, batch_size, count)
+				progress(count_iter, count_total)
 			
 			del batch_x
 			
@@ -363,18 +381,18 @@ class ModelPath:
 			time real NOT NULL,
 			lr text NOT NULL,
 			acc_train real NOT NULL,
-			acc_test real NOT NULL,
+			acc_val real NOT NULL,
 			acc_rel real NOT NULL,
 			loss_train real NOT NULL,
-			loss_test real NOT NULL,
+			loss_val real NOT NULL,
 			batch_train_iter integer NOT NULL,
-			batch_test_iter integer NOT NULL,
-			train_count_iter integer NOT NULL,
-			test_count_iter integer NOT NULL,
+			batch_val_iter integer NOT NULL,
+			count_train_iter integer NOT NULL,
+			count_val_iter integer NOT NULL,
 			loss_train_iter real NOT NULL,
-			loss_test_iter real NOT NULL,
+			loss_val_iter real NOT NULL,
 			acc_train_iter real NOT NULL,
-			acc_test_iter real NOT NULL,
+			acc_val_iter real NOT NULL,
 			info text NOT NULL,
 			PRIMARY KEY ("model_name", "epoch_number")
 		)"""
@@ -432,8 +450,8 @@ class ModelPath:
 			model_path.load_train_status(model)
 			
 			# Setup new epoch_number from model history
-			if model._history.epoch_number > 0:
-				model_path = model_path.epoch_number( model._history.epoch_number )
+			if model.get_epoch_number() > 0:
+				model_path = model_path.epoch_number( model.get_epoch_number() )
 		
 		# Get file path
 		file_path = model_path.get_model_file_path()
@@ -507,8 +525,8 @@ class ModelPath:
 		model_path = self
 		model_path = model_path.model_name(model.get_model_name())
 		
-		epoch_number = model._history.epoch_number
-		epoch_record = model._history.get_epoch(epoch_number)
+		epoch_number = model.get_epoch_number()
+		epoch_record = model.get_epoch(epoch_number)
 		
 		if epoch_number > 0 and epoch_record is not None:
 			
@@ -523,20 +541,20 @@ class ModelPath:
 			sql = """
 				insert or replace into history (
 					model_name, epoch_number, acc_train,
-					acc_test, acc_rel, loss_train, loss_test,
-					batch_train_iter, batch_test_iter,
-					train_count_iter, test_count_iter,
-					loss_train_iter, loss_test_iter,
-					acc_train_iter, acc_test_iter,
+					acc_val, acc_rel, loss_train, loss_val,
+					batch_train_iter, batch_val_iter,
+					count_train_iter, count_val_iter,
+					loss_train_iter, loss_val_iter,
+					acc_train_iter, acc_val_iter,
 					time, lr, info
 				) values
 				(
 					:model_name, :epoch_number, :acc_train,
-					:acc_test, :acc_rel, :loss_train, :loss_test,
-					:batch_train_iter, :batch_test_iter,
-					:train_count_iter, :test_count_iter,
-					:loss_train_iter, :loss_test_iter,
-					:acc_train_iter, :acc_test_iter,
+					:acc_val, :acc_rel, :loss_train, :loss_val,
+					:batch_train_iter, :batch_val_iter,
+					:count_train_iter, :count_val_iter,
+					:loss_train_iter, :loss_val_iter,
+					:acc_train_iter, :acc_val_iter,
 					:time, :lr, :info
 				)
 			"""
@@ -546,20 +564,20 @@ class ModelPath:
 				"model_name": model.get_model_name(),
 				"epoch_number": epoch_number,
 				"acc_train": epoch_record["acc_train"],
-				"acc_test": epoch_record["acc_test"],
+				"acc_val": epoch_record["acc_val"],
 				"acc_rel": epoch_record["acc_rel"],
 				"loss_train": epoch_record["loss_train"],
-				"loss_test": epoch_record["loss_test"],
+				"loss_val": epoch_record["loss_val"],
 				"time": epoch_record["time"],
 				"lr": epoch_record["lr"],
 				"batch_train_iter": epoch_record["batch_train_iter"],
-				"batch_test_iter": epoch_record["batch_test_iter"],
-				"train_count_iter": epoch_record["train_count_iter"],
-				"test_count_iter": epoch_record["test_count_iter"],
+				"batch_val_iter": epoch_record["batch_val_iter"],
+				"count_train_iter": epoch_record["count_train_iter"],
+				"count_val_iter": epoch_record["count_val_iter"],
 				"loss_train_iter": epoch_record["loss_train_iter"],
-				"loss_test_iter": epoch_record["loss_test_iter"],
+				"loss_val_iter": epoch_record["loss_val_iter"],
 				"acc_train_iter": epoch_record["acc_train_iter"],
-				"acc_test_iter": epoch_record["acc_test_iter"],
+				"acc_val_iter": epoch_record["acc_val_iter"],
 				"info": "{}",
 			}
 			
@@ -600,7 +618,7 @@ class ModelPath:
 		if save_epoch:
 			
 			# Save model with training state
-			epoch_number = model._history.epoch_number
+			epoch_number = model.get_epoch_number()
 			model_path = model_path.epoch_number(epoch_number)
 			
 			file_path2 = model_path.get_model_file_path()
