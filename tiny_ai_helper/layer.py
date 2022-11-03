@@ -392,9 +392,17 @@ def Layer_ToFloatImage():
 
 class Transform_ReadImage:
 	
+	def __init__(self, mode=None):
+		
+		self.mode=mode
+	
 	def __call__(self, t):
 		
 		t = Image.open(t)
+		
+		if self.mode is not None:
+			t = t.convert(self.mode)
+		
 		return t
 		
 

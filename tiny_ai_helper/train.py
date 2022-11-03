@@ -318,12 +318,12 @@ class TrainVerboseCallback:
 		loss_train = '%.3e' % loss_train
 		
 		msg = ("\rStep {epoch_number}, {iter_value}%" +
-			", acc: .{acc}, loss: {loss}, time: {time}s"
+			", acc: {acc}, loss: {loss}, time: {time}s"
 		).format(
 			epoch_number = trainer.train_status.epoch_number,
 			iter_value = round(trainer.train_status.get_iter_value() * 100),
 			loss = loss_train,
-			acc = str(round(acc_train * 100)).zfill(2),
+			acc = str(round(acc_train * 100) / 100).ljust(4, "0"),
 			time = str(round(time)),
 		)
 		
@@ -360,8 +360,8 @@ class TrainVerboseCallback:
 		print ("\r", end='')
 		
 		msg = ("Step {epoch_number}, " +
-			"acc: .{acc_train}, " +
-			"acc_val: .{acc_val}, " +
+			"acc: {acc_train}, " +
+			"acc_val: {acc_val}, " +
 			"acc_rel: {acc_rel}, " +
 			"loss: {loss_train}, " +
 			"loss_val: {loss_val}, " +
@@ -371,8 +371,8 @@ class TrainVerboseCallback:
 			epoch_number = trainer.train_status.epoch_number,
 			loss_train = loss_train,
 			loss_val = loss_val,
-			acc_train = str(round(acc_train * 10000)).zfill(4),
-			acc_val = str(round(acc_val * 10000)).zfill(4),
+			acc_train = str(round(acc_train * 10000) / 10000).ljust(6, "0"),
+			acc_val = str(round(acc_val * 10000) / 10000).ljust(6, "0"),
 			acc_rel = str(round(acc_rel * 10000) / 10000).ljust(6, "0"),
 			time = str(round(time)),
 			lr = str(res_lr),
@@ -531,6 +531,9 @@ class TrainSaveCallback:
 		Start train event
 		"""
 		
+		if trainer.model_path is None:
+			return
+		
 		if trainer.load_model:
 			save_metrics = trainer.model.load(
 				model_path=trainer.model_path,
@@ -552,6 +555,9 @@ class TrainSaveCallback:
 		"""
 		On epoch end
 		"""
+		
+		if trainer.model_path is None:
+			return
 		
 		save_metrics = {
 			"optimizer": trainer.optimizer.state_dict(),
