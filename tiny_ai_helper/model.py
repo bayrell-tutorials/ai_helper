@@ -21,6 +21,8 @@ class Model(torch.nn.Module):
 		
 		torch.nn.Module.__init__(self)
 		
+		self.optimizer = None
+		
 		if not hasattr(self, "_history"):
 			self._history = TrainHistory()
 		

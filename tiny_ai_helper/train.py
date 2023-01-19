@@ -651,7 +651,6 @@ class Trainer:
 		self.max_acc_rel = kwargs["max_acc_rel"] if "max_acc_rel" in kwargs else 5
 		self.min_loss_val = kwargs["min_loss_val"] if "min_loss_val" in kwargs else -1
 		self.batch_size = kwargs["batch_size"] if "batch_size" in kwargs else 64
-		self.lr = kwargs["lr"] if "lr" in kwargs else 1e-3
 		
 		self.train_dataset = kwargs["train_dataset"] if "train_dataset" in kwargs else False
 		self.val_dataset = kwargs["val_dataset"] if "val_dataset" in kwargs else False
@@ -806,9 +805,12 @@ class Trainer:
 		model = self.model
 		torch.cuda.empty_cache()
 		
+		# Get optimizer from mode
+		self.optimizer = model.optimizer
+		
 		# Adam optimizer
 		if self.optimizer is None:
-			self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
+			self.optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 		
 		# Mean squared error
 		if self.loss is None:

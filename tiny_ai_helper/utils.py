@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import math, io, torch, os, re, torch
+import math, io, os, re, json, torch
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
@@ -319,7 +319,6 @@ def save_file(file_name, data):
 	pass
 
 
-
 def read_file(file_name):
 	
 	"""
@@ -327,7 +326,37 @@ def read_file(file_name):
 	"""
 	
 	return read_bytes(file_name)
+
+
+def save_json(obj, file_name, indent=2, ensure_ascii=False, *args):
 	
+	"""
+	Save json to file
+	"""
+	
+	if isinstance(file_name, list):
+		file_name = os.path.join(*file_name)
+	
+	f = open(file_name, 'w')
+	json.dump(obj, f, indent=indent, ensure_ascii=ensure_ascii, *args)
+	f.close()
+	
+
+def load_json(file_name):
+	
+	"""
+	Load json from file
+	"""
+	
+	if isinstance(file_name, list):
+		file_name = os.path.join(*file_name)
+	
+	f = open(file_name, 'r')
+	obj = json.load(f)
+	f.close()
+	
+	return obj
+
 	
 def get_sort_alphanum_key(name):
 	
@@ -411,3 +440,16 @@ def get_pyplot_image(figure):
 
 	img = Image.fromarray( np.asarray(ag.buffer_rgba()) )
 	return img
+
+
+def dataset_split(dataset, k=0.1):
+	
+	"""
+	Split dataset to train and validation
+	"""
+	
+	train, val = torch.utils.data.random_split(
+        dataset, [ round(len(dataset)*(1-k)), round(len(dataset)*k) ]
+    )
+	
+	return train, val
