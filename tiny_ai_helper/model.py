@@ -391,7 +391,6 @@ class ModelPath:
 		cur = db_con.cursor()
 		
 		sql = """CREATE TABLE history(
-			model_name text NOT NULL,
 			epoch_number integer NOT NULL,
 			time real NOT NULL,
 			lr text NOT NULL,
@@ -409,7 +408,7 @@ class ModelPath:
 			acc_train_iter real NOT NULL,
 			acc_val_iter real NOT NULL,
 			info text NOT NULL,
-			PRIMARY KEY ("model_name", "epoch_number")
+			PRIMARY KEY ("epoch_number")
 		)"""
 		cur.execute(sql)
 		
@@ -506,12 +505,11 @@ class ModelPath:
 			
 			sql = """
 				select * from "history"
-				where model_name=:model_name
 				order by epoch_number asc
 			"""
 			
 			cur = db_con.cursor()
-			res = cur.execute(sql, {"model_name": model.get_model_name()})
+			res = cur.execute(sql, {})
 			
 			records = res.fetchall()
 			
@@ -555,7 +553,7 @@ class ModelPath:
 			
 			sql = """
 				insert or replace into history (
-					model_name, epoch_number, acc_train,
+					epoch_number, acc_train,
 					acc_val, acc_rel, loss_train, loss_val,
 					batch_train_iter, batch_val_iter,
 					count_train_iter, count_val_iter,
@@ -564,7 +562,7 @@ class ModelPath:
 					time, lr, info
 				) values
 				(
-					:model_name, :epoch_number, :acc_train,
+					:epoch_number, :acc_train,
 					:acc_val, :acc_rel, :loss_train, :loss_val,
 					:batch_train_iter, :batch_val_iter,
 					:count_train_iter, :count_val_iter,
@@ -576,7 +574,6 @@ class ModelPath:
 			
 			history = model._history
 			obj = {
-				"model_name": model.get_model_name(),
 				"epoch_number": epoch_number,
 				"acc_train": epoch_record["acc_train"],
 				"acc_val": epoch_record["acc_val"],
