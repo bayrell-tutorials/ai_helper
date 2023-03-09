@@ -5,6 +5,8 @@
 # License: MIT
 ##
 
+import json
+
 
 class Model:
     
@@ -45,8 +47,8 @@ class Model:
         self.scheduler = scheduler
         return self
     
-    def set_acc(self, name):
-        self.acc = acc
+    def set_acc(self, acc):
+        self.acc_fn = acc
         return self
     
     def set_name(self, name):
@@ -96,4 +98,24 @@ class Model:
         file = open(file_name, "w")
         outfile.write(json_str)
         file.close()
-            
+    
+    
+    def predict(self, x, device=None):
+        """
+        Predict
+        """
+        
+        if device is None:
+            device = get_default_device()
+        
+        module = self.module.to(device)
+        x = x.to(device)
+        
+        if self.transform_x is not None:
+            x = self.transform_x(x)
+        
+        module.eval()
+        y = module(x)
+        
+        return y
+        

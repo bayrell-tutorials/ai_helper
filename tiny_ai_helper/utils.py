@@ -5,6 +5,9 @@
 # License: MIT
 ##
 
+import torch
+from PIL import Image, ImageDraw
+
 
 def get_default_device():
     """
@@ -44,3 +47,52 @@ def get_acc_binary(batch_predict, batch_y):
         .compute().item()
     
     return round(acc * len(batch_y))
+
+
+def resize_image(image, size, contain=True, color=None):
+    """
+    Resize image canvas
+    """
+    
+    if contain:
+        image_new = image.copy()
+        image_new.thumbnail(size, Image.LANCZOS)
+        image_new = resize_image_canvas(image_new, size, color=color)
+        return image_new
+    
+    width, height = image.size
+    rect = (width, width)
+    if width > height:
+        rect = (height, height)
+    
+    image_new = resize_image_canvas(image, rect, color=color)
+    image_new.thumbnail(size, Image.Resampling.LANCZOS)
+    
+    return image_new
+    
+
+def resize_image_canvas(image, size, color=None):
+    """
+    Resize image canvas
+    """
+    
+    width, height = size
+    
+    if color == None:
+        pixels = image.load()
+        color = pixels[0, 0]
+        del pixels
+        
+    image_new = Image.new(image.mode, (width, height), color = color)
+    draw = ImageDraw.Draw(image_new)
+    
+    position = (
+        math.ceil((width - image.size[0]) / 2),
+        math.ceil((height - image.size[1]) / 2),
+    )
+    
+    image_new.paste(image, position)
+    
+    del draw, image
+    
+    return image_new

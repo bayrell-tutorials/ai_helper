@@ -5,7 +5,9 @@
 # License: MIT
 ##
 
+import torch, time
 from .utils import get_default_device
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class Trainer:
@@ -22,6 +24,8 @@ class Trainer:
         self.count_train = 0
         self.count_val = 0
         self.batch_iter = 0
+        self.time_start = 0
+        self.time_end = 0
         self.train_loader = None
         self.val_loader = None
         self.min_epochs = 5
@@ -30,7 +34,7 @@ class Trainer:
         self.do_training = False
         
     
-    def check_is_trained(self, trainer):
+    def check_is_trained(self):
         
         """
         Returns True if model is trained
@@ -60,8 +64,9 @@ class Trainer:
     def on_end_batch_train(self, batch_x, batch_y):
         
         # Лог обучения
-        batch_iter_value = round(self.batch_iter / self.len_train * 100)
-        print (f"\rStep {self.step}, {batch_iter_value}%", end='')
+        acc_train = str(round(self.acc_train / self.count_train * 100))
+        batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
+        print (f"\rStep {self.step}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_start_batch_val(self, batch_x, batch_y):
@@ -71,8 +76,9 @@ class Trainer:
     def on_end_batch_val(self, batch_x, batch_y):
         
         # Лог обучения
-        batch_iter_value = round(self.batch_iter / self.len_val * 100)
-        print (f"\rStep {self.step}, {batch_iter_value}%", end='')
+        acc_train = str(round(self.acc_train / self.count_train * 100))
+        batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
+        print (f"\rStep {self.step}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_end_epoch(self):
@@ -84,17 +90,24 @@ class Trainer:
         res_lr = str(res_lr)
         
         # Результат обучения
-        loss_train = '%.3e' % self.model.loss_train
-        loss_val = '%.3e' % self.model.loss_val
-        acc_train = str(round(self.model.acc_train / self.model.count_train * 1000000) / 10000)
-        acc_val = str(round(self.model.acc_val / self.model.count_val * 1000000) / 10000)
-        acc_train = acc_train.ljust(7, "0")
-        acc_val = acc_val.ljust(7, "0")
+        loss_train = '%.3e' % (self.loss_train / self.count_train)
+        loss_val = '%.3e' % (self.loss_val / self.count_val)
+        
+        acc_train = self.acc_train / self.count_train
+        acc_val = self.acc_val / self.count_val
+        acc_rel = acc_train / acc_val if acc_val > 0 else 0
+        acc_train = str(round(acc_train * 10000) / 100)
+        acc_val = str(round(acc_val * 10000) / 100)
+        acc_train = acc_train.ljust(5, "0")
+        acc_val = acc_val.ljust(5, "0")
+        acc_rel = str(round(acc_rel * 100) / 100).ljust(4, "0")
+        time = str(round(self.time_end - self.time_start))
         
         print ("\r", end='')
-        print (f"Step {step_index+1}, " +
-            f"acc: {acc_train}%, acc_val: {acc_val}%, " +
-            f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}"
+        print (f"Step {self.step}, " +
+            f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel}, " +
+            f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}, " +
+            f"t: {time}s"
         )
         
         # Update model history
@@ -108,10 +121,11 @@ class Trainer:
             "count_train": self.count_train,
             "count_val": self.count_val,
             "batch_iter": self.batch_iter,
+            "time": time,
         })
         
         # Save model
-        self.model.save_train(self)
+        #self.model.save_train(self)
     
     
     def on_end_train(self):
@@ -122,7 +136,7 @@ class Trainer:
         self.do_training = False
     
     
-    def fit(model, train_dataset, val_dataset, device=None, batch_size=64):
+    def fit(self, model, train_dataset, val_dataset, device=None, batch_size=64, epochs=10):
         
         """
         Fit model
@@ -132,9 +146,10 @@ class Trainer:
             device = get_default_device()
         
         self.device = device
-        self.model = model.to(device)
+        self.model = model
         self.len_train = len(train_dataset)
         self.len_val = len(val_dataset)
+        self.max_epochs = epochs
         
         self.train_loader = DataLoader(
             train_dataset,
@@ -150,6 +165,7 @@ class Trainer:
             shuffle=False
         )
         
+        module = self.model.module.to(device)
         get_acc_fn = self.model.acc_fn
         
         try:
@@ -169,12 +185,13 @@ class Trainer:
                 self.count_val = 0
                 self.batch_iter = 0
                 self.step = self.step + 1
+                self.time_start = time.time()
                 
                 self.on_start_epoch()
-                self.model.module.train()
+                module.train()
                 
                 # Обучение
-                for batch_x, batch_y in train_loader:
+                for batch_x, batch_y in self.train_loader:
                     
                     batch_x = batch_x.to(device)
                     batch_y = batch_y.to(device)
@@ -183,12 +200,12 @@ class Trainer:
                         batch_x = self.model.transform_x(batch_x)
                     
                     if self.model.transform_y is not None:
-                        batch_y = self.model.transform_x(batch_y)
+                        batch_y = self.model.transform_y(batch_y)
                     
                     self.on_start_batch_train(batch_x, batch_y)
                     
                     # Predict
-                    model_predict = self.model.module(batch_x)
+                    model_predict = module(batch_x)
                     loss_value = self.model.loss(model_predict, batch_y)
                     acc = get_acc_fn(model_predict, batch_y)
                     
@@ -211,10 +228,10 @@ class Trainer:
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 
-                self.model.module.eval()
+                module.eval()
                 
                 # Вычислим ошибку на проверочном датасете
-                for batch_x, batch_y in val_loader:
+                for batch_x, batch_y in self.val_loader:
                     
                     batch_x = batch_x.to(device)
                     batch_y = batch_y.to(device)
@@ -223,12 +240,12 @@ class Trainer:
                         batch_x = self.model.transform_x(batch_x)
                     
                     if self.model.transform_y is not None:
-                        batch_y = self.model.transform_x(batch_y)
+                        batch_y = self.model.transform_y(batch_y)
                     
                     self.on_start_batch_val(batch_x, batch_y)
                     
                     # Predict
-                    model_predict = self.model.module(batch_x)
+                    model_predict = module(batch_x)
                     loss_value = self.model.loss(model_predict, batch_y)
                     acc = get_acc_fn(model_predict, batch_y)
                     
@@ -241,7 +258,8 @@ class Trainer:
                     del batch_x, batch_y
                 
                 # Двигаем шедулер
-                self.model.scheduler.step(loss_val)
+                self.model.scheduler.step(self.loss_val)
+                self.time_end = time.time()
                 
                 self.on_end_epoch()
             
