@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright (с) Ildar Bikmamatov 2022
+# Copyright (с) Ildar Bikmamatov 2022 - 2023 <support@bayrell.org>
 # License: MIT
 ##
 
@@ -70,6 +70,41 @@ class Model:
         self.model_path = model_path
         return self
     
+    
+    def init(self, acc=None, optimizer=None, loss=None, scheduler=None, lr=1e-3,
+        transform_x=None, transform_y=None):
+        
+        """
+        Init model
+        """
+        
+        if acc is not None:
+            self.acc_fn = acc
+        
+        if transform_x is not None:
+            self.transform_x = transform_x
+        
+        if transform_y is not None:
+            self.transform_y = transform_y
+        
+        if loss is not None:
+            self.loss = loss
+        
+        if optimizer is not None:
+            self.optimizer = optimizer
+        
+        if scheduler is not None:
+            self.scheduler = scheduler
+        
+        if self.loss == None:
+            self.loss = nn.MSELoss()
+        
+        if self.optimizer == None:
+            self.optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+        
+        if self.scheduler == None:
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
+        
     
     def to(self, device):
         self.module = self.module.to(device)

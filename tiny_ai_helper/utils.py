@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright (с) Ildar Bikmamatov 2022
+# Copyright (с) Ildar Bikmamatov 2022 - 2023 <support@bayrell.org>
 # License: MIT
 ##
 
 import torch, os
+from torch import nn
 from PIL import Image, ImageDraw
 
 
@@ -18,6 +19,19 @@ def append_tensor(res, t):
 	t = t[None, :]
 	res = torch.cat( (res, t) )
 	return res
+
+
+def one_hot_encoder(num_class):
+    
+    """
+    Returns one hot encoder to num class
+    """
+    
+    def f(t):
+        t = nn.functional.one_hot(t.to(torch.int64), 10).to(torch.float32)
+        return t
+    
+    return f
 
 
 def get_default_device():
