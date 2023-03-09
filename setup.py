@@ -11,14 +11,14 @@ from os.path import abspath, dirname, join
 
 setup(
 	name="tiny_ai_helper",
-	version="0.0.14",
+	version="0.1.0",
 	description="Tiny AI Helper for PyTorch",
 	long_description=open(join(abspath(dirname(__file__)), 'README.md'), encoding='utf-8').read(),
 	long_description_content_type='text/markdown',
 	author="Ildar Bikmamatov",
-	author_email="ildar@bayrell.org",
+	author_email="support@bayrell.org",
 	license="MIT License",
-	url = "https://github.com/tiny-php/ai_helper",
+	url = "https://github.com/bayrell/ai_helper",
 	packages=find_packages(),
 	include_package_data = True,
 	classifiers=[
