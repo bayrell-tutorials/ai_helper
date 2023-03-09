@@ -5,8 +5,19 @@
 # License: MIT
 ##
 
-import torch
+import torch, os
 from PIL import Image, ImageDraw
+
+
+def append_tensor(res, t):
+	
+	"""
+	Append tensor
+	"""
+	
+	t = t[None, :]
+	res = torch.cat( (res, t) )
+	return res
 
 
 def get_default_device():
@@ -96,3 +107,55 @@ def resize_image_canvas(image, size, color=None):
     del draw, image
     
     return image_new
+
+
+def list_files(path="", recursive=True):
+	
+	"""
+		Returns files in folder
+	"""
+	
+	def read_dir(path, recursive=True):
+		res = []
+		items = os.listdir(path)
+		for item in items:
+			
+			item_path = os.path.join(path, item)
+			
+			if item_path == "." or item_path == "..":
+				continue
+			
+			if os.path.isdir(item_path):
+				if recursive:
+					res = res + read_dir(item_path, recursive)
+			else:
+				res.append(item_path)
+			
+		return res
+	
+	try:
+		items = read_dir( path, recursive )
+			
+		def f(item):
+			return item[len(path + "/"):]
+		
+		items = list( map(f, items) )
+	
+	except Exception:
+		items = []
+	
+	return items
+
+
+def list_dirs(path=""):
+	
+	"""
+		Returns dirs in folder
+	"""
+	
+	try:
+		items = os.listdir(path)
+	except Exception:
+		items = []
+    
+	return items

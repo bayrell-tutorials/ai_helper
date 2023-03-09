@@ -28,8 +28,9 @@ class Trainer:
         self.time_end = 0
         self.train_loader = None
         self.val_loader = None
-        self.min_epochs = 5
-        self.max_epochs = 10
+        self.max_best_models = 5
+        self.min_step = 5
+        self.max_step = 10
         self.min_loss_val = -1
         self.do_training = False
         
@@ -40,10 +41,10 @@ class Trainer:
         Returns True if model is trained
         """
         
-        if self.step >= self.max_epochs:
+        if self.step >= self.max_step:
             return True
         
-        if self.loss_val < self.min_loss_val and self.step >= self.min_epochs:
+        if self.loss_val < self.min_loss_val and self.step >= self.min_step:
             return True
         
         return False
@@ -100,32 +101,33 @@ class Trainer:
         acc_val = str(round(acc_val * 10000) / 100)
         acc_train = acc_train.ljust(5, "0")
         acc_val = acc_val.ljust(5, "0")
-        acc_rel = str(round(acc_rel * 100) / 100).ljust(4, "0")
+        acc_rel_str = str(round(acc_rel * 100) / 100).ljust(4, "0")
         time = str(round(self.time_end - self.time_start))
         
         print ("\r", end='')
         print (f"Step {self.step}, " +
-            f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel}, " +
+            f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
             f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}, " +
             f"t: {time}s"
         )
         
         # Update model history
         self.model.step = self.step
-        self.model.history.append({
-            "step": self.step,
-            "loss_train": self.loss_train,
-            "loss_val": self.loss_val,
-            "acc_train": self.acc_train,
-            "acc_val": self.acc_val,
+        self.model.history[self.step] = {
+            "loss_train": self.loss_train / self.count_train,
+            "loss_val": self.loss_val / self.count_val,
+            "acc_train": self.acc_train / self.count_train,
+            "acc_val": self.acc_val / self.count_val,
+            "acc_rel": acc_rel,
             "count_train": self.count_train,
             "count_val": self.count_val,
             "batch_iter": self.batch_iter,
             "time": time,
-        })
+        }
         
         # Save model
-        #self.model.save_train(self)
+        self.model.save_step()
+        self.model.save_the_best_models(epoch_count=self.max_best_models)
     
     
     def on_end_train(self):
@@ -136,20 +138,17 @@ class Trainer:
         self.do_training = False
     
     
-    def fit(self, model, train_dataset, val_dataset, device=None, batch_size=64, epochs=10):
+    def fit(self, model, train_dataset, val_dataset, batch_size=64, epochs=10):
         
         """
         Fit model
         """
         
-        if device is None:
-            device = get_default_device()
-        
-        self.device = device
+        self.device = model.device
         self.model = model
         self.len_train = len(train_dataset)
         self.len_val = len(val_dataset)
-        self.max_epochs = epochs
+        self.max_step = epochs
         
         self.train_loader = DataLoader(
             train_dataset,
@@ -165,11 +164,15 @@ class Trainer:
             shuffle=False
         )
         
-        module = self.model.module.to(device)
+        if self.device is None:
+            self.device = get_default_device()
+            self.model.to(self.device)
+        
+        module = self.model.module
         get_acc_fn = self.model.acc_fn
         
         try:
-            self.step = 0
+            self.step = self.model.step
             self.do_trainin = True
             
             # Start train
@@ -193,8 +196,8 @@ class Trainer:
                 # Обучение
                 for batch_x, batch_y in self.train_loader:
                     
-                    batch_x = batch_x.to(device)
-                    batch_y = batch_y.to(device)
+                    batch_x = batch_x.to(self.device)
+                    batch_y = batch_y.to(self.device)
                     
                     if self.model.transform_x is not None:
                         batch_x = self.model.transform_x(batch_x)
@@ -233,8 +236,8 @@ class Trainer:
                 # Вычислим ошибку на проверочном датасете
                 for batch_x, batch_y in self.val_loader:
                     
-                    batch_x = batch_x.to(device)
-                    batch_y = batch_y.to(device)
+                    batch_x = batch_x.to(self.device)
+                    batch_y = batch_y.to(self.device)
                     
                     if self.model.transform_x is not None:
                         batch_x = self.model.transform_x(batch_x)
