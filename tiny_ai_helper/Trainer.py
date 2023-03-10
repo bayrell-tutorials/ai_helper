@@ -6,7 +6,7 @@
 ##
 
 import torch, time
-from .utils import get_default_device
+from .utils import TransformDataset, get_default_device, batch_to
 from torch.utils.data import DataLoader, TensorDataset
 
 
@@ -150,6 +150,21 @@ class Trainer:
         self.len_val = len(val_dataset)
         self.max_step = epochs
         
+        # Create new transform dataset
+        if self.model.transform_x is not None or self.model.transform_y is not None:
+            
+            train_dataset = TransformDataset(
+                train_dataset,
+                transform_x=self.model.transform_x,
+                transform_y=self.model.transform_y
+            )
+            
+            val_dataset = TransformDataset(
+                val_dataset,
+                transform_x=self.model.transform_x,
+                transform_y=self.model.transform_y
+            )
+        
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -199,12 +214,6 @@ class Trainer:
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
                     
-                    if self.model.transform_x is not None:
-                        batch_x = self.model.transform_x(batch_x)
-                    
-                    if self.model.transform_y is not None:
-                        batch_y = self.model.transform_y(batch_y)
-                    
                     self.on_start_batch_train(batch_x, batch_y)
                     
                     # Predict
@@ -219,10 +228,11 @@ class Trainer:
                     # Оптимизируем
                     self.model.optimizer.step()
                     
+                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     self.acc_train = self.acc_train + acc
                     self.loss_train = self.loss_train + loss_value.item()
-                    self.count_train = self.count_train + len(batch_x)
-                    self.batch_iter = self.batch_iter + len(batch_x)
+                    self.count_train = self.count_train + batch_count
+                    self.batch_iter = self.batch_iter + batch_count
                     
                     self.on_end_batch_train(batch_x, batch_y)
                     del batch_x, batch_y
@@ -239,12 +249,6 @@ class Trainer:
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
                     
-                    if self.model.transform_x is not None:
-                        batch_x = self.model.transform_x(batch_x)
-                    
-                    if self.model.transform_y is not None:
-                        batch_y = self.model.transform_y(batch_y)
-                    
                     self.on_start_batch_val(batch_x, batch_y)
                     
                     # Predict
@@ -252,10 +256,11 @@ class Trainer:
                     loss_value = self.model.loss(model_predict, batch_y)
                     acc = get_acc_fn(model_predict, batch_y)
                     
+                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     self.acc_val = self.acc_val + acc
                     self.loss_val = self.loss_val + loss_value.item()
-                    self.count_val = self.count_val + len(batch_x)
-                    self.batch_iter = self.batch_iter + len(batch_x)
+                    self.count_val = self.count_val + batch_count
+                    self.batch_iter = self.batch_iter + batch_count
                     
                     self.on_end_batch_val(batch_x, batch_y)
                     del batch_x, batch_y

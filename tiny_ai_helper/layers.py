@@ -178,7 +178,7 @@ class TensorList:
         return "TensorList(" + str(self.tensors) + ")"
     
 
-class ModulesList(torch.nn.Module):
+class Stacking(torch.nn.Module):
     
     def __init__(self, *args):
         torch.nn.Module.__init__(self)
@@ -202,16 +202,23 @@ class ModulesList(torch.nn.Module):
             
         return res
     
-    def state_dict(self):
-        res = {}
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
         keys = self._modules.keys()
         for m in keys:
-            if self._modules[m] is not None:
-                res[m] = self._modules[m].state_dict()
-        return res
+            module = self._modules[m]
+            if module is not None:
+                module.state_dict(
+                    destination=destination,
+                    prefix=prefix + m + '.',
+                    keep_vars=keep_vars
+                )
+
+
+class Pipe():
+    def __init__(self, *args):
+        self.pipe = args
     
-    def load_state_dict(self, state_dict):
-        keys = self._modules.keys()
-        for m in keys:
-            if self._modules[m] is not None:
-                self._modules[m].load_state_dict(state_dict[m])
+    def __call__(self, value):
+        for fn in self.pipe:
+            value = fn(value)
+        return value

@@ -6,8 +6,32 @@
 ##
 
 import torch, json, os
+import numpy as np
 from torch import nn
 from PIL import Image, ImageDraw
+
+
+class TransformDataset(torch.utils.data.Dataset):
+    
+    def __init__(self, dataset, transform_x=None, transform_y=None):
+        self.dataset = dataset
+        self.transform_x = transform_x
+        self.transform_y = transform_y
+        
+    def __getitem__(self, index):
+        
+        x, y = self.dataset[index]
+        
+        if x is not None and self.transform_x:
+            x = self.transform_x(x)
+        
+        if y is not None and self.transform_y:
+            y = self.transform_y(y)
+        
+        return x, y
+        
+    def __len__(self):
+        return len(self.dataset)
 
 
 def append_tensor(res, t):
@@ -46,7 +70,7 @@ def one_hot_encoder(num_class):
     def f(t):
         if not isinstance(t, torch.Tensor):
             t = torch.tensor(t)
-        t = nn.functional.one_hot(t.to(torch.int64), 10).to(torch.float32)
+        t = nn.functional.one_hot(t.to(torch.int64), num_class).to(torch.float32)
         return t
     
     return f
@@ -71,6 +95,24 @@ def label_encoder(labels):
     return f
 
 
+def bag_of_words_encoder(dictionary_sz):
+    
+    """
+    Returns bag of words encoder from dictionary indexes.
+    """
+    
+    def f(text_index):
+        
+        t = torch.zeros(dictionary_sz - 1)
+        for index in text_index:
+            if index > 0:
+                t[index - 1] = 1
+        
+        return t
+        
+    return f
+
+
 def dictionary_encoder(dictionary, max_words):
     
     """
@@ -83,14 +125,34 @@ def dictionary_encoder(dictionary, max_words):
         t = torch.zeros(max_words).to(torch.int64)
         text_arr_sz = min(len(text_arr), max_words)
         
+        pos = 0
         for i in range(text_arr_sz):
             word = text_arr[i]
-            index = dictionary[word] if word in dictionary else 0
-            t[i] = index
+            
+            if word in dictionary:
+                index = dictionary[word]
+                t[pos] = index
+                pos = pos + 1
         
         return t
     
     return f
+
+
+def batch_map(f):
+    
+    def transform(batch_x):
+        
+        res = torch.tensor([])
+        
+        for i in range(len(batch_x)):
+            x = f(batch_x[i])
+            x = x[None, :]
+            res = torch.cat( (res, x) )
+        
+        return res.to(batch_x.device)
+    
+    return transform
 
 
 def batch_to(x, device):
@@ -126,10 +188,36 @@ def tensor_size(t):
     return params, size
 
 
-def split_dataset(dataset, k=0.2):
-    return torch.utils.data.random_split(
-    	dataset, [ round(len(dataset)*(1-k)), round(len(dataset)*k) ]
-    )
+def load_dataset_indexes(dataset, file_name):
+    
+    """
+    Load dataset indexes
+    """
+    
+    index = load_json( file_name )
+    if index is None:
+        index = list(np.random.permutation( len(dataset) ))
+        save_json(file_name, index, indent=None)
+    
+    return index
+
+
+def split_dataset(dataset, k=0.2, index=None):
+    
+    """
+    Split dataset for train and validation
+    """
+    
+    sz = len(dataset)
+    train_count = round(sz * (1 - k))
+    val_count = sz - train_count
+    
+    if index is None:
+        index = list(np.random.permutation(sz))
+    
+    from torch.utils.data import Subset
+    return [Subset(dataset, index[0 : train_count]), Subset(dataset, index[train_count : ])]
+    
 
 
 def get_default_device():
@@ -273,13 +361,24 @@ def list_dirs(path=""):
 	return items
 
 
+class JSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
 def save_json(file_name, obj, indent=2):
     
     """
     Save json to file
     """
     
-    json_str = json.dumps(obj, indent=indent)
+    json_str = json.dumps(obj, indent=indent, cls=JSONEncoder)
     file = open(file_name, "w")
     file.write(json_str)
     file.close()

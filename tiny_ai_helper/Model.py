@@ -7,7 +7,7 @@
 
 import torch, json, os
 from torch.utils.data import DataLoader, TensorDataset
-from .utils import list_files, get_default_device, batch_to, tensor_size
+from .utils import TransformDataset, list_files, get_default_device, batch_to, tensor_size
 
 
 class Model:
@@ -279,20 +279,51 @@ class Model:
         file.close()
     
     
-    def predict(self, x):
+    def predict(self, x, batch_size=64):
         
         """
         Predict
         """
         
-        if self.device:
-            x = x.to( self.device )
+        y = None
         
-        if self.transform_x is not None:
-            x = self.transform_x(x)
+        if isinstance(x, torch.utils.data.Dataset):
+            
+            y = torch.tensor([])
+            
+            if self.transform_x is not None:
+                x = TransformDataset(
+                    x,
+                    transform_x=self.transform_x
+                )
+            
+            loader = DataLoader(
+                x,
+                batch_size=batch_size,
+                drop_last=False,
+                shuffle=False
+            )
+            
+            self.module.eval()
+            
+            for batch_x, _ in loader:
+                
+                if self.device:
+                    batch_x = batch_to(batch_x, self.device)
+                
+                batch_predict = self.module(batch_x)
+                y = torch.cat( (y, batch_predict) )
         
-        self.module.eval()
-        y = self.module(x)
+        else:
+        
+            if self.device:
+                x = x.to( self.device )
+            
+            if self.transform_x is not None:
+                x = self.transform_x(x)
+            
+            self.module.eval()
+            y = self.module(x)
         
         return y
     
@@ -445,6 +476,12 @@ class Model:
             hooks.append(module.register_forward_hook(forward_hook))
         
         # Get input tensor
+        if self.transform_x is not None:
+            dataset = TransformDataset(
+                dataset,
+                transform_x=self.transform_x
+            )
+        
         loader = DataLoader(
             dataset,
             batch_size=2,
@@ -459,7 +496,7 @@ class Model:
         # Module predict
         module: torch.nn.Module = self.module
         module.apply(add_hooks)
-        module(x)
+        y = module(x)
         
         # Remove hooks
         for item in hooks:
