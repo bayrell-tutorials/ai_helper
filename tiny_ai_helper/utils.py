@@ -5,7 +5,7 @@
 # License: MIT
 ##
 
-import torch, os
+import torch, json, os
 from torch import nn
 from PIL import Image, ImageDraw
 
@@ -21,6 +21,22 @@ def append_tensor(res, t):
 	return res
 
 
+def make_index(arr, file_name=None):
+    
+    """
+    Make index from arr. Returns dict of positions values in arr
+    """
+    
+    res = {}
+    for index in range(len(arr)):
+        value = arr[index]
+        if file_name is not None:
+            value = value[file_name]
+        res[value] = index
+    
+    return res
+
+
 def one_hot_encoder(num_class):
     
     """
@@ -28,10 +44,92 @@ def one_hot_encoder(num_class):
     """
     
     def f(t):
+        if not isinstance(t, torch.Tensor):
+            t = torch.tensor(t)
         t = nn.functional.one_hot(t.to(torch.int64), 10).to(torch.float32)
         return t
     
     return f
+
+
+def label_encoder(labels):
+    
+    """
+    Returns one hot encoder from label
+    """
+    
+    def f(label_name):
+        
+        index = labels[label_name] if label_name in labels else -1
+        
+        if index == -1:
+            return torch.zeros( len(labels) )
+        
+        t = torch.tensor(index)
+        return nn.functional.one_hot(t.to(torch.int64), len(labels)).to(torch.float32)
+    
+    return f
+
+
+def dictionary_encoder(dictionary, max_words):
+    
+    """
+    Returns one hot encoder from text.
+    In dictionary 0 pos is empty value, if does not exists in dictionary
+    """
+    
+    def f(text_arr):
+        
+        t = torch.zeros(max_words).to(torch.int64)
+        text_arr_sz = min(len(text_arr), max_words)
+        
+        for i in range(text_arr_sz):
+            word = text_arr[i]
+            index = dictionary[word] if word in dictionary else 0
+            t[i] = index
+        
+        return t
+    
+    return f
+
+
+def batch_to(x, device):
+    
+    """
+    Move batch to device
+    """
+    
+    if isinstance(x, list):
+        for i in range(len(x)):
+            x[i] = x[i].to(device)
+    else:
+        x = x.to(device)
+    
+    return x
+
+
+def tensor_size(t):
+
+    """
+    Returns tensor size
+    """
+
+    sz = t.element_size()
+    shape = t.shape
+    params = 1
+
+    for c in shape:
+        params = params * c
+
+    size = params * sz
+
+    return params, size
+
+
+def split_dataset(dataset, k=0.2):
+    return torch.utils.data.random_split(
+    	dataset, [ round(len(dataset)*(1-k)), round(len(dataset)*k) ]
+    )
 
 
 def get_default_device():
@@ -173,3 +271,41 @@ def list_dirs(path=""):
 		items = []
     
 	return items
+
+
+def save_json(file_name, obj, indent=2):
+    
+    """
+    Save json to file
+    """
+    
+    json_str = json.dumps(obj, indent=indent)
+    file = open(file_name, "w")
+    file.write(json_str)
+    file.close()
+
+
+def load_json(file_name):
+    
+    """
+    Load json from file
+    """
+    
+    obj = None
+    file = None
+    
+    try:
+        
+        file = open(file_name, "r")
+        s = file.read()
+        obj = json.loads(s)
+        
+    except Exception:
+        pass
+    
+    finally:
+        if file:
+            file.close()
+            file = None
+    
+    return obj

@@ -196,8 +196,8 @@ class Trainer:
                 # Обучение
                 for batch_x, batch_y in self.train_loader:
                     
-                    batch_x = batch_x.to(self.device)
-                    batch_y = batch_y.to(self.device)
+                    batch_x = batch_to(batch_x, self.device)
+                    batch_y = batch_to(batch_y, self.device)
                     
                     if self.model.transform_x is not None:
                         batch_x = self.model.transform_x(batch_x)
@@ -236,8 +236,8 @@ class Trainer:
                 # Вычислим ошибку на проверочном датасете
                 for batch_x, batch_y in self.val_loader:
                     
-                    batch_x = batch_x.to(self.device)
-                    batch_y = batch_y.to(self.device)
+                    batch_x = batch_to(batch_x, self.device)
+                    batch_y = batch_to(batch_y, self.device)
                     
                     if self.model.transform_x is not None:
                         batch_x = self.model.transform_x(batch_x)

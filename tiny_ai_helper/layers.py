@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright (с) Ildar Bikmamatov 2022
+# Copyright (с) Ildar Bikmamatov 2022 - 2023 <support@bayrell.org>
 # License: MIT
 ##
 
+import torch
 import numpy as np
+from typing import overload
 from PIL import Image, ImageDraw
 from .utils import resize_image
 
@@ -129,3 +131,87 @@ class NormalizeImage(torch.nn.Module):
         return 'mean={}, std={}, inplace={}'.format(
             self.mean, self.std, self.inplace
         )
+
+
+class PreparedModule(torch.nn.Module):
+    
+    def __init__(self, module, weight_path, *args, **kwargs):
+        
+        torch.nn.Module.__init__(self)
+        
+        self.module = module
+        self.weight_path = weight_path
+        
+        for param in self.module.parameters():
+            param.requires_grad = False
+    
+    def forward(self, x):
+        x = self.module(x)
+        return x
+    
+    def load(self, *args, **kwargs):
+        
+        """
+        Load model from file
+        """
+        
+        state_dict = torch.load( self.weight_path )
+        self.module.load_state_dict( state_dict )
+    
+    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
+        return {}
+    
+    def load_state_dict(self, state_dict, strict = True):
+        pass
+
+
+class TensorList:
+    
+    def __init__(self, *tensors):
+        self.tensors = tensors
+    
+    def to(self, device):
+        for m in self.modules:
+            self.tensors[m] = self.tensors[m].to(device)
+    
+    def __repr__(self):
+        return "TensorList(" + str(self.tensors) + ")"
+    
+
+class ModulesList(torch.nn.Module):
+    
+    def __init__(self, *args):
+        torch.nn.Module.__init__(self)
+        for i, module in enumerate(args):
+            self.add_module(str(i), module)
+    
+    def forward(self, tensor_list):
+        
+        device = tensor_list[0].device
+        res = torch.tensor([]).to(device)
+        
+        keys = list(self._modules.keys())
+        for index, m in enumerate(keys):
+            if self._modules[m] is not None:
+                module = self._modules[m]
+                x = module(tensor_list[index])
+            else:
+                x = tensor_list[index]
+            
+            res = torch.cat( (res, x), dim = 1 )
+            
+        return res
+    
+    def state_dict(self):
+        res = {}
+        keys = self._modules.keys()
+        for m in keys:
+            if self._modules[m] is not None:
+                res[m] = self._modules[m].state_dict()
+        return res
+    
+    def load_state_dict(self, state_dict):
+        keys = self._modules.keys()
+        for m in keys:
+            if self._modules[m] is not None:
+                self._modules[m].load_state_dict(state_dict[m])

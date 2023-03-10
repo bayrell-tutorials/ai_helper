@@ -6,7 +6,8 @@
 ##
 
 import torch, json, os
-from .utils import list_files, get_default_device
+from torch.utils.data import DataLoader, TensorDataset
+from .utils import list_files, get_default_device, batch_to, tensor_size
 
 
 class Model:
@@ -100,7 +101,7 @@ class Model:
             self.loss = nn.MSELoss()
         
         if self.optimizer == None:
-            self.optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+            self.optimizer = torch.optim.Adam(self.module.parameters(), lr=lr)
         
         if self.scheduler == None:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
@@ -109,7 +110,14 @@ class Model:
     def to(self, device):
         self.module = self.module.to(device)
         self.device = device
-        #self.optimizer = self.optimizer.to(device)
+    
+    
+    def to_gpu(self):
+        self.to( get_default_device() )
+    
+    
+    def to_cpu(self):
+        self.to( torch.device("cpu") )
     
     
     def load_file(self, file_path):
@@ -385,5 +393,97 @@ class Model:
                     
                     file_path = os.path.join( self.model_path, file_name )
                     os.unlink(file_path)
+    
+    
+    def summary(self, dataset: TensorDataset):
+        
+        """
+        Show model summary
+        """
+        
+        hooks = []
+        layers = []
+        res = {
+            "params_count": 0,
+            "params_train_count": 0,
+            "total_size": 0,
+        }
+        
+        def forward_hook(module, input, output):
             
+            class_name = module.__class__.__module__ + "." + module.__class__.__name__
+            layer = {
+                "name": module.__class__.__name__,
+                "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
+                "shape": output.shape,
+                "params": 0
+            }
+            
+            # Get weight
+            if hasattr(module, "weight"):
+                params, size = tensor_size(module.weight)
+                res["params_count"] += params
+                res["total_size"] += size
+                layer["params"] += params
+                
+                if module.weight.requires_grad:
+                    res["params_train_count"] += params
+            
+            # Get bias
+            if hasattr(module, "bias"):
+                params, size = tensor_size(module.bias)
+                res["params_count"] += params
+                res["total_size"] += size
+                layer["params"] += params
+                
+                if module.bias.requires_grad:
+                    res["params_train_count"] += params
+            
+            layers.append(layer)
+                
+        def add_hooks(module):
+            hooks.append(module.register_forward_hook(forward_hook))
+        
+        # Get input tensor
+        loader = DataLoader(
+            dataset,
+            batch_size=2,
+            drop_last=False,
+            shuffle=False
+        )
+        it = loader._get_iterator()
+        
+        x, _ = next(it)
+        x = batch_to(x, self.device)
+        
+        # Module predict
+        module: torch.nn.Module = self.module
+        module.apply(add_hooks)
+        module(x)
+        
+        # Remove hooks
+        for item in hooks:
+            item.remove()
+        
+        # Print info
+        def format_row(args):
+            return "{:<5} {:>20} {:>20} {:>15}".format(*args)
+        
+        res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
+        
+        width = 63
+        print( "=" * width )
+        print( format_row(["", "Layer", "Output", "Params"]) )
+        print( "-" * width )
+        
+        for i, layer in enumerate(layers):
+            shape = "(" + ", ".join(map(str,layer["shape"])) + ")"
+            print( format_row([i + 1, layer["name"], shape, layer["params"]]) )
+        
+        print( "-" * width )
+        print( f"Model name: {self.name}" )
+        print( f"Total params: {res['params_count']}" )
+        print( f"Trainable params: {res['params_train_count']}" )
+        print( f"Total size: {res['total_size']} MiB" )
+        print( "=" * width )
         
