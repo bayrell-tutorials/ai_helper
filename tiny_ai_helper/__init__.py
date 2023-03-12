@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright (с) Ildar Bikmamatov 2022
+# Tiny ai helper
+# Copyright (с) Ildar Bikmamatov 2022 - 2023 <support@bayrell.org>
 # License: MIT
 ##
 
