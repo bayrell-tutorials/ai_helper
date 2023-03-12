@@ -127,26 +127,27 @@ class NormalizeImage(torch.nn.Module):
 
 class PreparedModule(torch.nn.Module):
     
-    def __init__(self, module, weight_path, *args, **kwargs):
+    def __init__(self, module, weight_path, forward, *args, **kwargs):
         
         torch.nn.Module.__init__(self)
         
         self.module = module
         self.weight_path = weight_path
+        self._forward = forward
         
         for param in self.module.parameters():
             param.requires_grad = False
-    
+        
+        self.load_weight()
+        
     def forward(self, x):
-        x = self.module(x)
+        x = self._forward(self, x)
         return x
     
-    def load(self, *args, **kwargs):
-        
+    def load_weight(self):
         """
-        Load model from file
+        Load weight
         """
-        
         state_dict = torch.load( self.weight_path )
         self.module.load_state_dict( state_dict )
     
