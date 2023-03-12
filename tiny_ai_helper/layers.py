@@ -43,12 +43,6 @@ class ToIntImage(torch.nn.Module):
     
     def __call__(self, t):
         
-        if isinstance(t, Image.Image):
-            t = torch.from_numpy( np.array(t) )
-            t = t.to(torch.uint8)
-            t = torch.moveaxis(t, 2, 0)
-            return t
-        
         t = t * 255
         t = t.to(torch.uint8)
         
@@ -59,18 +53,13 @@ class ToFloatImage(torch.nn.Module):
     
     def __call__(self, t):
         
-        if isinstance(t, Image.Image):
-            t = torch.from_numpy( np.array(t) )
-            t = t.to(torch.uint8)
-            t = torch.moveaxis(t, 2, 0)
-        
         t = t.to(torch.float)
         t = t / 255.0
         
         return t
 
 
-class ReadImage:
+class ReadImage(torch.nn.Module):
     
     def __init__(self, mode=None):
         
@@ -80,8 +69,10 @@ class ReadImage:
         
         t = Image.open(t)
         
-        if self.mode is not None:
+        if self.mode is not None and self.mode != t.mode:
             t = t.convert(self.mode)
+        
+        t = torch.from_numpy( np.array(t) )
         
         return t
 
@@ -159,7 +150,7 @@ class PreparedModule(torch.nn.Module):
         self.module.load_state_dict( state_dict )
     
     def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
-        return {}
+        pass
     
     def load_state_dict(self, state_dict, strict = True):
         pass

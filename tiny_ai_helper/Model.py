@@ -470,6 +470,11 @@ class Model:
                 if module.bias.requires_grad:
                     res["params_train_count"] += params
             
+            # Add output size
+            params, size = tensor_size(output)
+            res["total_size"] += size
+            
+            # Add layer
             layers.append(layer)
                 
         def add_hooks(module):
@@ -493,10 +498,18 @@ class Model:
         x, _ = next(it)
         x = batch_to(x, self.device)
         
+        # Add input size
+        params, size = tensor_size(x)
+        res["total_size"] += size
+        
         # Module predict
         module: torch.nn.Module = self.module
         module.apply(add_hooks)
         y = module(x)
+        
+        # Clear cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         # Remove hooks
         for item in hooks:

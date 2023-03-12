@@ -62,7 +62,7 @@ class Trainer:
         pass
     
     
-    def on_end_batch_train(self, batch_x, batch_y):
+    def on_end_batch_train(self):
         
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
@@ -74,7 +74,7 @@ class Trainer:
         pass
     
     
-    def on_end_batch_val(self, batch_x, batch_y):
+    def on_end_batch_val(self):
         
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
@@ -211,6 +211,7 @@ class Trainer:
                 # Обучение
                 for batch_x, batch_y in self.train_loader:
                     
+                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
                     
@@ -219,27 +220,29 @@ class Trainer:
                     # Predict
                     model_predict = module(batch_x)
                     loss_value = self.model.loss(model_predict, batch_y)
+                    loss_value_item = loss_value.item()
                     acc = get_acc_fn(model_predict, batch_y)
+                    
+                    del batch_x, batch_y
                     
                     # Вычислим градиент
                     self.model.optimizer.zero_grad()
                     loss_value.backward()
+                    del loss_value
                     
                     # Оптимизируем
                     self.model.optimizer.step()
                     
-                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     self.acc_train = self.acc_train + acc
-                    self.loss_train = self.loss_train + loss_value.item()
+                    self.loss_train = self.loss_train + loss_value_item
                     self.count_train = self.count_train + batch_count
                     self.batch_iter = self.batch_iter + batch_count
                     
-                    self.on_end_batch_train(batch_x, batch_y)
-                    del batch_x, batch_y
-                    
-                    # Очистим кэш CUDA
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
+                    self.on_end_batch_train()
+                  
+                # Clear cache
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 
                 module.eval()
                 
@@ -262,9 +265,13 @@ class Trainer:
                     self.count_val = self.count_val + batch_count
                     self.batch_iter = self.batch_iter + batch_count
                     
-                    self.on_end_batch_val(batch_x, batch_y)
-                    del batch_x, batch_y
-                
+                    self.on_end_batch_val()
+                    
+                    # Clear cache
+                    del batch_x, batch_y, loss_value
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    
                 # Двигаем шедулер
                 self.model.scheduler.step(self.loss_val)
                 self.time_end = time.time()
