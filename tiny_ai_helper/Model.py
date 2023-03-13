@@ -436,6 +436,7 @@ class Model:
         hooks = []
         layers = []
         res = {
+            "layer_name_max": 10,
             "params_count": 0,
             "params_train_count": 0,
             "total_size": 0,
@@ -450,6 +451,9 @@ class Model:
                 "shape": output.shape,
                 "params": 0
             }
+            
+            if res["layer_name_max"] < len(module.__class__.__name__):
+                res["layer_name_max"] = len(module.__class__.__name__)
             
             # Get weight
             if hasattr(module, "weight"):
@@ -517,19 +521,21 @@ class Model:
             item.remove()
         
         # Print info
-        def format_row(args):
-            return "{:<5} {:>20} {:>20} {:>15}".format(*args)
+        def format_row(res, args):
+            layer_name_max = res["layer_name_max"] + 5
+            s = "{:<5} {:>"+str(layer_name_max)+"} {:>20} {:>15}"
+            return s.format(*args)
         
         res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
         
         width = 63
         print( "=" * width )
-        print( format_row(["", "Layer", "Output", "Params"]) )
+        print( format_row(res, ["", "Layer", "Output", "Params"]) )
         print( "-" * width )
         
         for i, layer in enumerate(layers):
             shape = "(" + ", ".join(map(str,layer["shape"])) + ")"
-            print( format_row([i + 1, layer["name"], shape, layer["params"]]) )
+            print( format_row(res, [i + 1, layer["name"], shape, layer["params"]]) )
         
         print( "-" * width )
         print( f"Model name: {self.name}" )

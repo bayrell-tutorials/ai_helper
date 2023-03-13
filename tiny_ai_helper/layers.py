@@ -127,7 +127,7 @@ class NormalizeImage(torch.nn.Module):
 
 class PreparedModule(torch.nn.Module):
     
-    def __init__(self, module, weight_path, forward, *args, **kwargs):
+    def __init__(self, module, weight_path, forward=None, *args, **kwargs):
         
         torch.nn.Module.__init__(self)
         
@@ -139,9 +139,14 @@ class PreparedModule(torch.nn.Module):
             param.requires_grad = False
         
         self.load_weight()
-        
+    
     def forward(self, x):
-        x = self._forward(self, x)
+        
+        if self._forward:
+            x = self._forward(self, x)
+        else:
+            x = self.module(x)
+            
         return x
     
     def load_weight(self):
@@ -156,20 +161,7 @@ class PreparedModule(torch.nn.Module):
     
     def load_state_dict(self, state_dict, strict = True):
         pass
-
-
-class TensorList:
-    
-    def __init__(self, *tensors):
-        self.tensors = tensors
-    
-    def to(self, device):
-        for m in self.modules:
-            self.tensors[m] = self.tensors[m].to(device)
-    
-    def __repr__(self):
-        return "TensorList(" + str(self.tensors) + ")"
-    
+  
 
 class Stacking(torch.nn.Module):
     
