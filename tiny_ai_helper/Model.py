@@ -24,7 +24,7 @@ class Model:
         self.acc_fn = None
         self.name = name
         self.model_path = None
-        self.step = 0
+        self.epoch = 0
         self.history = {}
     
     
@@ -128,7 +128,7 @@ class Model:
         """
         
         save_metrics = torch.load(file_path)
-        self.step = save_metrics["step"]
+        self.epoch = save_metrics["epoch"]
         
         # Load history
         if "history" in save_metrics:
@@ -165,13 +165,13 @@ class Model:
         self.load_file(file_path)
     
     
-    def load_step(self, step):
+    def load_epoch(self, epoch):
         
         """
-        Load current step
+        Load current epoch
         """
         
-        file_path = os.path.join(self.model_path, "model-" + str(step) + ".data")
+        file_path = os.path.join(self.model_path, "model-" + str(epoch) + ".data")
         self.load_file(file_path)
         
         
@@ -204,8 +204,8 @@ class Model:
                 file = None
         
         if obj is not None:
-            step = obj["step"]
-            self.load_step(step)
+            epoch = obj["epoch"]
+            self.load_epoch(epoch)
         
     
     def load_best(self):
@@ -237,11 +237,11 @@ class Model:
                 file = None
         
         if obj is not None:
-            best_step = obj["best_step"]
-            self.load_step(best_step)
+            best_epoch = obj["best_epoch"]
+            self.load_epoch(best_epoch)
         
     
-    def save_step(self):
+    def save_epoch(self):
         
         """
         Save train status
@@ -250,7 +250,7 @@ class Model:
         # Get metrics
         save_metrics = {}
         save_metrics["name"] = self.name
-        save_metrics["step"] = self.step
+        save_metrics["epoch"] = self.epoch
         save_metrics["history"] = self.history.copy()
         save_metrics["module"] = self.module.state_dict()
         save_metrics["optimizer"] = self.optimizer.state_dict()
@@ -262,16 +262,15 @@ class Model:
             os.makedirs(self.model_path)
         
         # Save model to file
-        file_name = os.path.join(self.model_path, "model-" + str(self.step) + ".data")
+        file_name = os.path.join(self.model_path, "model-" + str(self.epoch) + ".data")
         torch.save(save_metrics, file_name)
         
         # Save history to json
-        epoch_indexes = self.get_the_best_epoch(1)
-        best_step = epoch_indexes[0] if len(epoch_indexes) > 0 else 0
+        best_epoch = self.get_the_best_epoch()
         file_name = os.path.join(self.model_path, "history.json")
         obj = {
-            "step": self.step,
-            "best_step": best_step,
+            "epoch": self.epoch,
+            "best_epoch": best_epoch,
             "history": self.history.copy(),
         }
         json_str = json.dumps(obj, indent=2)
@@ -343,7 +342,6 @@ class Model:
             res2 = [ index ]
             
             if isinstance(metric_name, list):
-                res2 = [ index ]
                 for name in metric_name:
                     res2.append( epoch[name] if name in epoch else 0 )
             
@@ -355,10 +353,21 @@ class Model:
         return res
     
     
-    def get_the_best_epoch(self, epoch_count=5):
+    def get_the_best_epoch(self):
         
         """
-        Returns teh best epoch
+        Returns the best epoch
+        """
+        
+        epoch_indexes = self.get_the_best_epochs_indexes(1)
+        best_epoch = epoch_indexes[0] if len(epoch_indexes) > 0 else 0
+        return best_epoch
+    
+    
+    def get_the_best_epochs_indexes(self, epoch_count=5):
+        
+        """
+        Returns best epoch indexes
         """
         
         metrics = self.get_metrics(["loss_val", "acc_rel"])
@@ -409,10 +418,10 @@ class Model:
             return file_type, epoch_index
         
         
-        if self.step > 0 and epoch_count > 0 and os.path.isdir(self.model_path):
+        if self.epoch > 0 and epoch_count > 0 and os.path.isdir(self.model_path):
             
-            epoch_indexes = self.get_the_best_epoch(epoch_count)
-            epoch_indexes.append( self.step )
+            epoch_indexes = self.get_the_best_epochs_indexes(epoch_count)
+            epoch_indexes.append( self.epoch )
             
             files = list_files( self.model_path )
             
@@ -543,4 +552,37 @@ class Model:
         print( f"Trainable params: {res['params_train_count']}" )
         print( f"Total size: {res['total_size']} MiB" )
         print( "=" * width )
+    
+    
+    def draw_history(self, ax, metrics=[], label=None, legend=True, convert=None):
         
+        """
+        Draw history to axes
+        """
+        
+        metrics_values = self.get_metrics(metrics)
+        for index, name in enumerate(metrics):
+            values = [ item[index + 1] for item in metrics_values ]
+            if convert:
+                values = list(map(convert, values))
+            ax.plot( values, label=name)
+        
+        if label:
+            ax.set_xlabel( label )
+        
+        if legend:
+            ax.legend()
+    
+    def show_history(self, metrics=[]):
+        
+        """
+        Show history
+        """
+        
+        import matplotlib.pyplot as plt
+        
+        ax = plt.gca()
+        self.draw_history(ax, metrics)
+        
+        plt.show()
+    

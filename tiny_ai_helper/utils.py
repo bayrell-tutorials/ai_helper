@@ -279,7 +279,7 @@ def resize_image(image, size, contain=True, color=None):
         rect = (height, height)
     
     image_new = resize_image_canvas(image, rect, color=color)
-    image_new.thumbnail(size, Image.Resampling.LANCZOS)
+    image_new.thumbnail(size, Image.LANCZOS)
     
     return image_new
     

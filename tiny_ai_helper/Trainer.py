@@ -17,7 +17,7 @@ class Trainer:
         
         self.device = None
         self.model = None
-        self.step = 0
+        self.epoch = 0
         self.loss_train = 0
         self.loss_val = 0
         self.acc_train = 0
@@ -30,8 +30,8 @@ class Trainer:
         self.train_loader = None
         self.val_loader = None
         self.max_best_models = 5
-        self.min_step = 5
-        self.max_step = 10
+        self.min_epoch = 5
+        self.max_epoch = 10
         self.min_loss_val = -1
         self.do_training = False
         
@@ -42,10 +42,10 @@ class Trainer:
         Returns True if model is trained
         """
         
-        if self.step >= self.max_step:
+        if self.epoch >= self.max_epoch:
             return True
         
-        if self.loss_val < self.min_loss_val and self.step >= self.min_step:
+        if self.loss_val < self.min_loss_val and self.epoch >= self.min_epoch:
             return True
         
         return False
@@ -68,7 +68,7 @@ class Trainer:
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
         batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
-        print (f"\rStep {self.step}, {batch_iter_value}%, acc: {acc_train}%", end='')
+        print (f"\rStep {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_start_batch_val(self, batch_x, batch_y):
@@ -80,7 +80,7 @@ class Trainer:
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
         batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
-        print (f"\rStep {self.step}, {batch_iter_value}%, acc: {acc_train}%", end='')
+        print (f"\rStep {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_end_epoch(self):
@@ -106,15 +106,15 @@ class Trainer:
         time = str(round(self.time_end - self.time_start))
         
         print ("\r", end='')
-        print (f"Step {self.step}, " +
+        print (f"epoch {self.epoch}, " +
             f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
             f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}, " +
             f"t: {time}s"
         )
         
         # Update model history
-        self.model.step = self.step
-        self.model.history[self.step] = {
+        self.model.epoch = self.epoch
+        self.model.history[self.epoch] = {
             "loss_train": self.loss_train / self.count_train,
             "loss_val": self.loss_val / self.count_val,
             "acc_train": self.acc_train / self.count_train,
@@ -127,7 +127,7 @@ class Trainer:
         }
         
         # Save model
-        self.model.save_step()
+        self.model.save_epoch()
         self.model.save_the_best_models(epoch_count=self.max_best_models)
     
     
@@ -149,7 +149,7 @@ class Trainer:
         self.model = model
         self.len_train = len(train_dataset)
         self.len_val = len(val_dataset)
-        self.max_step = epochs
+        self.max_epoch = epochs
         
         # Create new transform dataset
         if self.model.transform_x is not None or self.model.transform_y is not None:
@@ -188,7 +188,7 @@ class Trainer:
         get_acc_fn = self.model.acc_fn
         
         try:
-            self.step = self.model.step
+            self.epoch = self.model.epoch
             self.do_trainin = True
             
             # Start train
@@ -203,7 +203,7 @@ class Trainer:
                 self.count_train = 0
                 self.count_val = 0
                 self.batch_iter = 0
-                self.step = self.step + 1
+                self.epoch = self.epoch + 1
                 self.time_start = time.time()
                 
                 self.on_start_epoch()
