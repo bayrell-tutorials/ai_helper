@@ -32,7 +32,7 @@ class Trainer:
         self.max_best_models = 5
         self.min_epoch = 5
         self.max_epoch = 10
-        self.min_loss_val = -1
+        self.min_loss_val = 1e-5
         self.do_training = False
         
     
@@ -68,7 +68,7 @@ class Trainer:
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
         batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
-        print (f"\rStep {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
+        print (f"\rEpoch {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_start_batch_val(self, batch_x, batch_y):
@@ -80,7 +80,7 @@ class Trainer:
         # Лог обучения
         acc_train = str(round(self.acc_train / self.count_train * 100))
         batch_iter_value = round(self.batch_iter / (self.len_train + self.len_val) * 100)
-        print (f"\rStep {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
+        print (f"\rEpoch {self.epoch}, {batch_iter_value}%, acc: {acc_train}%", end='')
     
     
     def on_end_epoch(self):
@@ -106,7 +106,7 @@ class Trainer:
         time = str(round(self.time_end - self.time_start))
         
         print ("\r", end='')
-        print (f"epoch {self.epoch}, " +
+        print (f"Epoch {self.epoch}, " +
             f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
             f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}, " +
             f"t: {time}s"

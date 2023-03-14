@@ -159,10 +159,7 @@ class PreparedModule(torch.nn.Module):
     def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
         pass
     
-    def load_state_dict(self, state_dict, strict = True):
-        pass
-  
-
+    
 class Stacking(torch.nn.Module):
     
     def __init__(self, *args):

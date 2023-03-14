@@ -8,7 +8,8 @@
 
 import torch, json, os
 from torch.utils.data import DataLoader, TensorDataset
-from .utils import TransformDataset, list_files, get_default_device, batch_to, tensor_size
+from .utils import TransformDataset, list_files, \
+    get_default_device, batch_to, tensor_size, load_json
 
 
 class Model:
@@ -137,7 +138,7 @@ class Model:
         # Load module
         if "module" in save_metrics:
             state_dict = save_metrics["module"]
-            self.module.load_state_dict(state_dict)
+            self.module.load_state_dict(state_dict, strict=False)
         
         # Load optimizer
         if "optimizer" in save_metrics:
@@ -186,22 +187,7 @@ class Model:
         if not os.path.exists(file_name):
             return
         
-        obj = None
-        file = None
-        
-        try:
-            
-            file = open(file_name, "r")
-            s = file.read()
-            obj = json.loads(s)
-            
-        except Exception:
-            pass
-        
-        finally:
-            if file:
-                file.close()
-                file = None
+        obj = load_json(file_name)
         
         if obj is not None:
             epoch = obj["epoch"]
@@ -219,22 +205,7 @@ class Model:
         if not os.path.exists(file_name):
             return
         
-        obj = None
-        file = None
-        
-        try:
-            
-            file = open(file_name, "r")
-            s = file.read()
-            obj = json.loads(s)
-            
-        except Exception:
-            pass
-        
-        finally:
-            if file:
-                file.close()
-                file = None
+        obj = load_json(file_name)
         
         if obj is not None:
             best_epoch = obj["best_epoch"]
@@ -266,6 +237,15 @@ class Model:
         torch.save(save_metrics, file_name)
         
         # Save history to json
+        self.save_history()
+    
+    
+    def save_history(self):
+        
+        """
+        Save history to json
+        """
+        
         best_epoch = self.get_the_best_epoch()
         file_name = os.path.join(self.model_path, "history.json")
         obj = {

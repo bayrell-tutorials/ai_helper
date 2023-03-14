@@ -261,27 +261,35 @@ def get_acc_binary(batch_predict, batch_y):
     return round(acc * len(batch_y))
 
 
-def resize_image(image, size, contain=True, color=None):
+def resize_image(image, new_size, contain=True, color=None):
    
     """
-    Resize image canvas
+    Resize image
     """
     
-    if contain:
-        image_new = image.copy()
-        image_new.thumbnail(size, Image.LANCZOS)
-        image_new = resize_image_canvas(image_new, size, color=color)
-        return image_new
+    w1 = image.size[0]
+    h1 = image.size[1]
+    w2 = new_size[0]
+    h2 = new_size[1]
+
+    k1 = w1 / h1
+    k2 = w2 / h2
+    w_new = 0
+    h_new = 0
     
-    width, height = image.size
-    rect = (width, width)
-    if width > height:
-        rect = (height, height)
+    if k1 > k2 and contain or k1 < k2 and not contain:
+        h_new = round(w2 * h1 / w1)
+        w_new = w2
+        
+    else:
+        h_new = h2
+        w_new = round(h2 * w1 / h1)
     
-    image_new = resize_image_canvas(image, rect, color=color)
-    image_new.thumbnail(size, Image.LANCZOS)
+    image_new = image.resize( (w_new, h_new) )
+    image_resize = resize_image_canvas(image_new, new_size)
+    del image_new
     
-    return image_new
+    return image_resize
     
 
 def resize_image_canvas(image, size, color=None):
@@ -298,7 +306,6 @@ def resize_image_canvas(image, size, color=None):
         del pixels
         
     image_new = Image.new(image.mode, (width, height), color = color)
-    draw = ImageDraw.Draw(image_new)
     
     position = (
         math.ceil((width - image.size[0]) / 2),
@@ -306,9 +313,6 @@ def resize_image_canvas(image, size, color=None):
     )
     
     image_new.paste(image, position)
-    
-    del draw, image
-    
     return image_new
 
 
