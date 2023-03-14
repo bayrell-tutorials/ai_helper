@@ -561,8 +561,15 @@ class Model:
         
         import matplotlib.pyplot as plt
         
-        ax = plt.gca()
-        self.draw_history(ax, metrics)
-        
+        fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+        self.draw_history(ax[0],
+            ["acc_train", "acc_val"],
+            label="Accuracy",
+            convert=lambda x: x * 100
+        )
+        self.draw_history(ax[1],
+            ["loss_train", "loss_val"],
+            label="Loss"
+        )
         plt.show()
     
