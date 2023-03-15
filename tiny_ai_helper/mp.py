@@ -6,7 +6,7 @@
 # License: MIT
 ##
 
-import torch, time
+import torch, time, math
 import torch.multiprocessing as mp
 from .utils import batch_to
   
@@ -53,7 +53,7 @@ class MultiProcessPredict():
         # Init vars
         self.finish_queue = mp.Queue()
         self.worker_queue = mp.Queue()
-        self.loader_queue = mp.Queue( self.num_workers * 2 )
+        self.loader_queue = mp.Queue( self.num_workers * 4 )
         
         # Setup obj
         obj={
@@ -101,15 +101,18 @@ class MultiProcessPredict():
         # Loader loop
         for batch_x, batch_y in self.loader:
             
-            # Wait full queue
-            while self.loader_queue.full() and not self.worker_queue.empty():
-                time.sleep(0.1)
-            
             if self.worker_queue.empty():
                 break
             
             # Send batch to workers
-            self.loader_queue.put( (batch_x, batch_y) )
+            success = False
+            while not success and not self.worker_queue.empty():
+                try:
+                    self.loader_queue.put( (batch_x, batch_y), True, 0.5 )
+                    success = True
+                except:
+                    pass
+                
         
         # Set finish flag to True
         if not self.finish_queue.empty():
@@ -177,7 +180,8 @@ def dataset_predict_worker(obj):
             
             gc.collect()
     
-    except:
+    except Exception as e:
+        print(e)
         pass
     
     finally:
@@ -204,7 +208,7 @@ def get_features_predict(batch_x, batch_y, batch_predict, predict_obj):
 
 
 def get_features_save_file(
-    worker_queue, pipe_recv, file_name,
+    worker_queue, finish_queue, pipe_recv, file_name,
     dataset_count, features_count
 ):
     
@@ -217,7 +221,7 @@ def get_features_save_file(
     pos = 0
     next_pos = 0
     time_start = time.time()
-    while not worker_queue.empty() or pipe_recv.poll():
+    while not finish_queue.empty() or not worker_queue.empty() or pipe_recv.poll():
         
         if pipe_recv.poll():
             s = pipe_recv.recv()
@@ -228,18 +232,21 @@ def get_features_save_file(
                 next_pos = pos + 16
                 t = str(round(time.time() - time_start))
                 print ("\r" + str(pos) + " " +
-                    str(round(pos / dataset_count * 100)) + "% " + t + "s", end='')
+                    str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
                 
                 file.flush()
                 
         time.sleep(0.1)
     
+    t = str(round(time.time() - time_start))
     print ("\r" + str(pos) + " " +
-        str(round(pos / dataset_count * 100)) + "% " + t + "s", end='')
+        str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
     
     # Закрыть файл для записи
     file.flush()
     file.close()
+    
+    print("\nOk")
 
 
 def save_features_mp(
@@ -274,7 +281,7 @@ def save_features_mp(
         mp.Process(
             target=get_features_save_file,
             args=(
-                predict.worker_queue, pipe_recv,
+                predict.worker_queue, predict.finish_queue, pipe_recv,
                 file_name, len(dataset), features_count
             )
         )
@@ -351,6 +358,6 @@ def save_features(
             next_pos = pos + 16
             t = str(round(time.time() - time_start))
             print ("\r" + str(pos) + " " +
-                str(round(pos / dataset_count * 100)) + "% " + t + "s", end='')
+                str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
     
     file.close()

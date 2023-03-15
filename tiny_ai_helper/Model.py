@@ -6,7 +6,7 @@
 # License: MIT
 ##
 
-import torch, json, os
+import torch, time, json, math, gc, os
 from torch.utils.data import DataLoader, TensorDataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, load_json
@@ -264,48 +264,66 @@ class Model:
         """
         Predict
         """
+         
+        if self.transform_x is not None:
+            x = self.transform_x(x)
         
-        y = None
+        if self.device:
+            x = x.to( self.device )
         
-        if isinstance(x, torch.utils.data.Dataset):
-            
-            y = torch.tensor([])
-            
-            if self.transform_x is not None:
-                x = TransformDataset(
-                    x,
-                    transform_x=self.transform_x
-                )
-            
-            loader = DataLoader(
-                x,
-                batch_size=batch_size,
-                drop_last=False,
-                shuffle=False
-            )
-            
-            self.module.eval()
-            
-            for batch_x, _ in loader:
-                
-                if self.device:
-                    batch_x = batch_to(batch_x, self.device)
-                
-                batch_predict = self.module(batch_x)
-                y = torch.cat( (y, batch_predict) )
-        
-        else:
-            
-            if self.transform_x is not None:
-                x = self.transform_x(x)
-            
-            if self.device:
-                x = x.to( self.device )
-            
-            self.module.eval()
-            y = self.module(x)
+        self.module.eval()
+        y = self.module(x)
         
         return y
+    
+    
+    def predict_dataset(self, dataset, predict, batch_size=64, predict_obj=None):
+        
+        """
+        Predict dataset
+        """
+        
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            drop_last=False,
+            shuffle=False
+        )
+        
+        self.module.eval()
+        
+        pos = 0
+        next_pos = 0
+        dataset_count = len(dataset)
+        time_start = time.time()
+        
+        for batch_x, batch_y in loader:
+            
+            if self.transform_x:
+                bath_x = self.transform_x(bath_x)
+            
+            if self.device:
+                batch_x = batch_to(batch_x, self.device)
+            
+            batch_predict = self.module(batch_x)
+            predict(batch_x, batch_y, batch_predict, predict_obj)
+            
+            # Show progress
+            pos = pos + len(batch_x)
+            if pos > next_pos:
+                next_pos = pos + 16
+                t = str(round(time.time() - time_start))
+                print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
+            
+            del batch_x, batch_y, batch_predict
+            
+            # Clear cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            gc.collect()
+        
+        print ("\n")
     
     
     def get_metrics(self, metric_name):
@@ -553,6 +571,7 @@ class Model:
         if legend:
             ax.legend()
     
+    
     def show_history(self, metrics=[]):
         
         """
@@ -573,3 +592,35 @@ class Model:
         )
         plt.show()
     
+    
+    def show_history_log(self):
+        
+        h = list(self.history.keys())
+        h.sort()
+        
+        for epoch in h:
+            
+            res = self.history[epoch]
+            
+            acc_train = res["acc_train"] if "acc_train" in res else 0
+            acc_val = res["acc_val"] if "acc_val" in res else 0
+            acc_rel = res["acc_rel"] if "acc_rel" in res else 0
+            loss_train = res["loss_train"] if "loss_train" in res else 0
+            loss_val = res["loss_val"] if "loss_val" in res else 0
+            res_lr = res["res_lr"] if "res_lr" in res else 0
+            time = res["time"] if "time" in res else 0
+            
+            acc_train = str(round(acc_train * 10000) / 100)
+            acc_val = str(round(acc_val * 10000) / 100)
+            acc_train = acc_train.ljust(5, "0")
+            acc_val = acc_val.ljust(5, "0")
+            acc_rel_str = str(round(acc_rel * 100) / 100).ljust(4, "0")
+            loss_train = '%.3e' % loss_train
+            loss_val = '%.3e' % loss_val
+            res_lr_str = str(res_lr)
+            
+            print (f"Epoch {epoch}, " +
+                f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
+                f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr_str}, " +
+                f"t: {time}s"
+            )

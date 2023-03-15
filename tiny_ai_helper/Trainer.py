@@ -89,7 +89,7 @@ class Trainer:
         res_lr = []
         for param_group in self.model.optimizer.param_groups:
             res_lr.append(param_group['lr'])
-        res_lr = str(res_lr)
+        res_lr_str = str(res_lr)
         
         # Результат обучения
         loss_train = '%.3e' % (self.loss_train / self.count_train)
@@ -108,7 +108,7 @@ class Trainer:
         print ("\r", end='')
         print (f"Epoch {self.epoch}, " +
             f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
-            f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr}, " +
+            f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr_str}, " +
             f"t: {time}s"
         )
         
@@ -123,6 +123,7 @@ class Trainer:
             "count_train": self.count_train,
             "count_val": self.count_val,
             "batch_iter": self.batch_iter,
+            "res_lr": res_lr,
             "time": time,
         }
         
