@@ -66,16 +66,33 @@ class ReadImage(torch.nn.Module):
         
         self.mode=mode
     
-    def __call__(self, t):
+    def __call__(self, batch):
         
-        t = Image.open(t)
+        res = []
+        for t in batch:
         
-        if self.mode is not None and self.mode != t.mode:
-            t = t.convert(self.mode)
+            t = Image.open(t)
+            
+            if self.mode is not None and self.mode != t.mode:
+                t = t.convert(self.mode)
+            
+            res.append(t)
         
-        t = torch.from_numpy( np.array(t) )
+        return res
+
+
+class ImageToTensor(torch.nn.Module):
+    
+    def __call__(self, batch):
         
-        return t
+        res = torch.tensor([])
+        for t in batch:
+            
+            t = torch.from_numpy( np.array(t) )
+            t = t[None, :]
+            res = torch.cat( (res, t) )
+        
+        return res
 
 
 class ResizeImage(torch.nn.Module):
@@ -88,16 +105,14 @@ class ResizeImage(torch.nn.Module):
         self.contain = contain
         self.color = color
     
-    def __call__(self, t):
+    def __call__(self, batch):
         
-        t = resize_image(t, self.size, contain=self.contain, color=self.color)
+        res = []
+        for t in batch:
+            t = resize_image(t, self.size, contain=self.contain, color=self.color)
+            res.append(t)
         
-        return t
-    
-    def extra_repr(self) -> str:
-        return 'size={}, contain={}, color={}'.format(
-            self.size, self.contain, self.color
-        )
+        return res
 
 
 class NormalizeImage(torch.nn.Module):
@@ -204,3 +219,26 @@ class Pipe():
         for fn in self.pipe:
             value = fn(value)
         return value
+
+
+class ModuleRemoveLastClassifier(PreparedModule):
+    
+    def __init__(self, module, weight_path, *args, **kwargs):
+        
+        PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
+        
+        # Remove last layer
+        classifier = list(self.module.classifier.children())
+        classifier = classifier[:-1]
+        self.module.classifier = torch.nn.Sequential(*classifier)
+
+
+class ModuleRemoveAllClassifier(PreparedModule):
+    
+    def __init__(self, module, weight_path, *args, **kwargs):
+        PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
+    
+    def forward(self, x):
+        x = self.module.features(x)
+        x = self.module.avgpool(x)
+        return x

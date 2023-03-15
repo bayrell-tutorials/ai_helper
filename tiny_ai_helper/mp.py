@@ -47,8 +47,7 @@ class MultiProcessPredict():
             self.dataset,
             batch_size=self.batch_size,
             drop_last=False,
-            shuffle=False,
-            num_workers=self.num_workers
+            shuffle=False
         )
         
         # Init vars
@@ -66,6 +65,8 @@ class MultiProcessPredict():
             "worker_queue": self.worker_queue,
             "loader_queue": self.loader_queue,
             "finish_queue": self.finish_queue,
+            "transform_x": self.model.transform_x,
+            "transform_y": self.model.transform_y,
         }
         
         # Add workers
@@ -125,6 +126,8 @@ def dataset_predict_worker(obj):
     One thread worker
     """
     
+    import gc
+    
     loader = obj["loader"]
     module = obj["module"]
     device = obj["device"]
@@ -133,6 +136,8 @@ def dataset_predict_worker(obj):
     worker_queue = obj["worker_queue"]
     loader_queue = obj["loader_queue"]
     finish_queue = obj["finish_queue"]
+    transform_x = obj["transform_x"]
+    transform_y = obj["transform_y"]
     
     worker_queue.put(1)
     
@@ -150,6 +155,12 @@ def dataset_predict_worker(obj):
             if batch_x is None:
                 continue
             
+            if transform_x:
+                batch_x = transform_x(batch_x)
+            
+            if transform_y:
+                batch_y = transform_y(batch_y)
+            
             if device:
                 batch_x = batch_to(batch_x, device)
             
@@ -163,6 +174,8 @@ def dataset_predict_worker(obj):
             # Clear cache
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            
+            gc.collect()
     
     except:
         pass
@@ -245,7 +258,7 @@ def save_features_mp(
     predict = MultiProcessPredict(
         dataset=dataset,
         model=model,
-        batch_size=4,
+        batch_size=batch_size,
         num_workers=num_workers,
         predict=get_features_predict,
         predict_obj={
@@ -303,6 +316,12 @@ def save_features(
     module = model.module
     
     for batch_x, batch_y in loader:
+        
+        if model.transform_x:
+            batch_x = model.transform_x(batch_x)
+        
+        if model.transform_y:
+            batch_y = model.transform_y(batch_y)
         
         # Predict batch
         if device:

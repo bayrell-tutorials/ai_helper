@@ -100,7 +100,7 @@ class Model:
             self.scheduler = scheduler
         
         if self.loss == None:
-            self.loss = nn.MSELoss()
+            self.loss = torch.nn.MSELoss()
         
         if self.optimizer == None:
             self.optimizer = torch.optim.Adam(self.module.parameters(), lr=lr)
@@ -295,12 +295,12 @@ class Model:
                 y = torch.cat( (y, batch_predict) )
         
         else:
-        
-            if self.device:
-                x = x.to( self.device )
             
             if self.transform_x is not None:
                 x = self.transform_x(x)
+            
+            if self.device:
+                x = x.to( self.device )
             
             self.module.eval()
             y = self.module(x)
