@@ -8,10 +8,14 @@
 
 from .Model import Model
 from .Trainer import Trainer
+from .DatasetPredict import DatasetPredict, save_features, save_features_mp
 
 __version__ = "0.1.3"
 
 __all__ = (
     "Model",
     "Trainer",
+    "DatasetPredict",
+    "save_features",
+    "save_features_mp",
 )

@@ -18,8 +18,8 @@ class Trainer:
         self.device = None
         self.model = None
         self.epoch = 0
-        self.loss_train = 0
-        self.loss_val = 0
+        self.loss_train = 1
+        self.loss_val = 1
         self.acc_train = 0
         self.acc_val = 0
         self.count_train = 0
