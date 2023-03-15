@@ -9,39 +9,9 @@
 import torch, time
 import torch.multiprocessing as mp
 from .utils import batch_to
+  
 
-
-def dataset_predict_work(obj):
-        
-    """
-    One thread worker
-    """
-    
-    loader = obj["loader"]
-    module = obj["module"]
-    device = obj["device"]
-    predict = obj["predict"]
-    queue = obj["queue"]
-    predict_obj = obj["predict_obj"]
-    
-    queue.put(1)
-    
-    for batch_x, batch_y in loader:
-        
-        if device:
-            batch_x = batch_to(batch_x, device)
-        
-        batch_predict = module(batch_x)
-        
-        if predict:
-            predict(batch_x, batch_y, batch_predict, predict_obj)
-        
-        del batch_x, batch_y, batch_predict
-    
-    queue.get()
-    
-
-class DatasetPredict():
+class MultiProcessPredict():
     
     def __init__(self, dataset, model,
         batch_size=4, num_workers=None,
@@ -57,7 +27,7 @@ class DatasetPredict():
         self.predict = predict
         self.predict_obj = predict_obj
         self.loader = None
-        self.workers = None
+        self.workers = []
         self.num_workers = num_workers
         self.pos = 0
     
@@ -81,76 +51,147 @@ class DatasetPredict():
             num_workers=self.num_workers
         )
         
-        # Init vars       
-        self.queue = mp.Queue()
+        # Init vars
+        self.finish_queue = mp.Queue()
+        self.worker_queue = mp.Queue()
+        self.loader_queue = mp.Queue( self.num_workers * 2 )
+        
+        # Setup obj
+        obj={
+            "module": self.model.module,
+            "device": self.model.device,
+            "loader": self.loader,
+            "predict": self.predict,
+            "predict_obj": self.predict_obj,
+            "worker_queue": self.worker_queue,
+            "loader_queue": self.loader_queue,
+            "finish_queue": self.finish_queue,
+        }
+        
+        # Add workers
+        for _ in range(self.num_workers):
+            self.add_worker(
+                mp.Process(target=dataset_predict_worker, args=(obj,))
+            )
+    
+    
+    def add_worker(self, worker):
+        
+        """
+        Add worker
+        """
+        
+        self.workers.append(worker)
     
     
     def start(self):
         
         """
-        Start one thread predict
-        """
-        
-        obj={
-            "module": self.model.module,
-            "device": self.model.device,
-            "loader": self.loader,
-            "predict": self.predict,
-            "predict_obj": self.predict_obj,
-            "queue": self.queue,
-        }
-        
-        dataset_predict_work(obj)
-        
-    
-    def start_mp(self):
-        
-        """
         Start multiprocessing predict
         """
         
-        q = mp.Queue()
+        # Set work flag to start
+        self.finish_queue.put(1)
         
-        obj={
-            "module": self.model.module,
-            "device": self.model.device,
-            "loader": self.loader,
-            "predict": self.predict,
-            "predict_obj": self.predict_obj,
-            "queue": self.queue,
-        }
+        # Start workers
+        for p in self.workers:
+            p.start()
         
-        # Run workers
-        self.workers = []
-        for _ in range(self.num_workers):
-            self.start_worker(
-                mp.Process(target=dataset_predict_work, args=(obj,))
-            )
+        # Loader loop
+        for batch_x, batch_y in self.loader:
+            
+            # Wait full queue
+            while self.loader_queue.full() and not self.worker_queue.empty():
+                time.sleep(0.1)
+            
+            if self.worker_queue.empty():
+                break
+            
+            # Send batch to workers
+            self.loader_queue.put( (batch_x, batch_y) )
+        
+        # Set finish flag to True
+        if not self.finish_queue.empty():
+            self.finish_queue.get()
+        
+        # Join to all workers
+        for p in self.workers:
+            p.join()
+
+
+def dataset_predict_worker(obj):
+        
+    """
+    One thread worker
+    """
     
+    loader = obj["loader"]
+    module = obj["module"]
+    device = obj["device"]
+    predict = obj["predict"]
+    predict_obj = obj["predict_obj"]
+    worker_queue = obj["worker_queue"]
+    loader_queue = obj["loader_queue"]
+    finish_queue = obj["finish_queue"]
     
-    def start_worker(self, worker):
-        
-        """
-        Start worker
-        """
-        
-        worker.start()
-        self.workers.append(worker)
+    worker_queue.put(1)
     
+    try:
+        while not ( finish_queue.empty() and loader_queue.empty() ):
+            
+            batch_x = None
+            batch_y = None
+            
+            try:
+                batch_x, batch_y = loader_queue.get(True, 0.5)
+            except:
+                pass
+            
+            if batch_x is None:
+                continue
+            
+            if device:
+                batch_x = batch_to(batch_x, device)
+            
+            batch_predict = module(batch_x)
+            
+            if predict:
+                predict(batch_x, batch_y, batch_predict, predict_obj)
+            
+            del batch_x, batch_y, batch_predict
+            
+            # Clear cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     
-    def join(self):
+    except:
+        pass
+    
+    finally:
+        time.sleep(1)
+        worker_queue.get()
+
+
+def get_features_predict(batch_x, batch_y, batch_predict, predict_obj):
         
-        """
-        Join all workers
-        """
+    pipe_send = predict_obj["pipe_send"]
+    
+    # Send features to pipe
+    sz = len(batch_x)
+    for i in range(sz):
         
-        if self.workers is not None:
-            for p in self.workers:
-                p.join()
+        s = []
+        if isinstance(batch_y, list):
+            s = [ batch_item[i] for batch_item in batch_y ]
+        s += batch_predict[i].tolist()
+        s = list(map(str,s))
+        s = ",".join(s)
+        
+        pipe_send.send(s)
 
 
 def get_features_save_file(
-    queue, pipe_recv, file_name,
+    worker_queue, pipe_recv, file_name,
     dataset_count, features_count
 ):
     
@@ -163,7 +204,7 @@ def get_features_save_file(
     pos = 0
     next_pos = 0
     time_start = time.time()
-    while not queue.empty():
+    while not worker_queue.empty() or pipe_recv.poll():
         
         if pipe_recv.poll():
             s = pipe_recv.recv()
@@ -180,25 +221,12 @@ def get_features_save_file(
                 
         time.sleep(0.1)
     
-    # Закрыть файл для записи
-    file.close()
-
-
-def get_features_predict(batch_x, batch_y, batch_predict, predict_obj):
-        
-    pipe_send = predict_obj["pipe_send"]
+    print ("\r" + str(pos) + " " +
+        str(round(pos / dataset_count * 100)) + "% " + t + "s", end='')
     
-    # Отправляет фичи в Pipe
-    sz = len(batch_y)
-    for i in range(sz):
-        
-        s = []
-        if isinstance(batch_y, list):
-            s = [ batch_item[i] for batch_item in batch_y ]
-        s = batch_predict[i].tolist()
-        s = list(map(str,s))
-        s = ",".join(s)
-        pipe_send.send(s)  
+    # Закрыть файл для записи
+    file.flush()
+    file.close()
 
 
 def save_features_mp(
@@ -214,7 +242,7 @@ def save_features_mp(
     pipe_recv, pipe_send = mp.Pipe()
     
     # Create dataset
-    predict = DatasetPredict(
+    predict = MultiProcessPredict(
         dataset=dataset,
         model=model,
         batch_size=4,
@@ -228,20 +256,19 @@ def save_features_mp(
     # Init
     predict.init()
     
-    # Start
-    predict.start_mp()
-    predict.start_worker(
+    # Add save file worker
+    predict.add_worker(
         mp.Process(
             target=get_features_save_file,
             args=(
-                predict.queue, pipe_recv,
+                predict.worker_queue, pipe_recv,
                 file_name, len(dataset), features_count
             )
         )
     )
     
-    # Join threads
-    predict.join()
+    # Start
+    predict.start()
 
 
 def save_features(
@@ -284,15 +311,17 @@ def save_features(
         batch_predict = module(batch_x)
         
         # Save predict to file
-        sz = len(batch_y)
+        sz = len(batch_x)
         for i in range(sz):
             s = []
             if isinstance(batch_y, list):
                 s = [ batch_item[i] for batch_item in batch_y ]
-            s = batch_predict[i].tolist()
+            s += batch_predict[i].tolist()
             s = list(map(str,s))
             s = ",".join(s)
             file.write(s + "\n")
+        
+        file.flush()
         
         # Delete batch
         del batch_x, batch_y, batch_predict
@@ -304,7 +333,5 @@ def save_features(
             t = str(round(time.time() - time_start))
             print ("\r" + str(pos) + " " +
                 str(round(pos / dataset_count * 100)) + "% " + t + "s", end='')
-            
-            file.flush()
     
     file.close()
