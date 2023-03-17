@@ -198,10 +198,12 @@ class PreparedModule(torch.nn.Module):
     
 class Stacking(torch.nn.Module):
     
-    def __init__(self, *args):
+    def __init__(self, *args, is_tensor_list=True):
         torch.nn.Module.__init__(self)
         for i, module in enumerate(args):
             self.add_module(str(i), module)
+        
+        self.is_tensor_list = is_tensor_list
     
     def forward(self, tensor_list):
         
@@ -210,11 +212,15 @@ class Stacking(torch.nn.Module):
         
         keys = list(self._modules.keys())
         for index, m in enumerate(keys):
+            
+            if self.is_tensor_list:
+                x = tensor_list[index]
+            else:
+                x = tensor_list
+            
             if self._modules[m] is not None:
                 module = self._modules[m]
-                x = module(tensor_list[index])
-            else:
-                x = tensor_list[index]
+                x = module(x)
             
             res = torch.cat( (res, x), dim = 1 )
             

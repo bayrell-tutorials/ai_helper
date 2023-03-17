@@ -99,13 +99,16 @@ class Model:
         if scheduler is not None:
             self.scheduler = scheduler
         
-        if self.loss == None:
+        if self.loss is None:
             self.loss = torch.nn.MSELoss()
         
-        if self.optimizer == None:
-            self.optimizer = torch.optim.Adam(self.module.parameters(), lr=lr)
+        if self.optimizer is None:
+            try:
+                self.optimizer = torch.optim.Adam(self.module.parameters(), lr=lr)
+            except:
+                pass
         
-        if self.scheduler == None:
+        if self.scheduler is None and self.optimizer is not None:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
         
     
@@ -330,7 +333,7 @@ class Model:
             
             gc.collect()
         
-        print ("\n")
+        print ("\nOk")
     
     
     def get_metrics(self, metric_name):
