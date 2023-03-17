@@ -24,6 +24,17 @@ class InsertFirstAxis(torch.nn.Module):
         return t
 
 
+class InsertLastAxis(torch.nn.Module):
+    
+    """
+    Insert last Axis for convolution layer
+    """
+    
+    def __call__(self, t):
+        t = t[:,None]
+        return t
+
+
 class MoveRGBToEnd(torch.nn.Module):
         
     def __call__(self, t):
@@ -56,6 +67,15 @@ class ToFloatImage(torch.nn.Module):
         
         t = t.to(torch.float)
         t = t / 255.0
+        
+        return t
+
+
+class ToFloat(torch.nn.Module):
+    
+    def __call__(self, t):
+        
+        t = t.to(torch.float)
         
         return t
 
@@ -142,7 +162,7 @@ class NormalizeImage(torch.nn.Module):
 
 class PreparedModule(torch.nn.Module):
     
-    def __init__(self, module, weight_path, forward=None, *args, **kwargs):
+    def __init__(self, module, weight_path=None, forward=None, *args, **kwargs):
         
         torch.nn.Module.__init__(self)
         
@@ -168,8 +188,9 @@ class PreparedModule(torch.nn.Module):
         """
         Load weight
         """
-        state_dict = torch.load( self.weight_path )
-        self.module.load_state_dict( state_dict )
+        if self.weight_path:
+            state_dict = torch.load( self.weight_path )
+            self.module.load_state_dict( state_dict )
     
     def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
         pass
@@ -223,7 +244,7 @@ class Pipe():
 
 class ModuleRemoveLastClassifier(PreparedModule):
     
-    def __init__(self, module, weight_path, *args, **kwargs):
+    def __init__(self, module, weight_path=None, *args, **kwargs):
         
         PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
         
@@ -235,7 +256,7 @@ class ModuleRemoveLastClassifier(PreparedModule):
 
 class ModuleRemoveAllClassifier(PreparedModule):
     
-    def __init__(self, module, weight_path, *args, **kwargs):
+    def __init__(self, module, weight_path=None, *args, **kwargs):
         PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
     
     def forward(self, x):

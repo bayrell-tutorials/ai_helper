@@ -7,7 +7,7 @@
 ##
 
 import torch, time
-from .utils import TransformDataset, get_default_device, batch_to
+from .utils import get_default_device, batch_to
 from torch.utils.data import DataLoader, TensorDataset
 
 
@@ -152,21 +152,6 @@ class Trainer:
         self.len_val = len(val_dataset)
         self.max_epoch = epochs
         
-        # Create new transform dataset
-        if self.model.transform_x is not None or self.model.transform_y is not None:
-            
-            train_dataset = TransformDataset(
-                train_dataset,
-                transform_x=self.model.transform_x,
-                transform_y=self.model.transform_y
-            )
-            
-            val_dataset = TransformDataset(
-                val_dataset,
-                transform_x=self.model.transform_x,
-                transform_y=self.model.transform_y
-            )
-        
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -213,6 +198,12 @@ class Trainer:
                 # Обучение
                 for batch_x, batch_y in self.train_loader:
                     
+                    if self.model.transform_x:
+                        batch_x = self.model.transform_x(batch_x)
+                    
+                    if self.model.transform_y:
+                        batch_y = self.model.transform_y(batch_y)
+                    
                     batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
@@ -250,6 +241,12 @@ class Trainer:
                 
                 # Вычислим ошибку на проверочном датасете
                 for batch_x, batch_y in self.val_loader:
+                    
+                    if self.model.transform_x:
+                        batch_x = self.model.transform_x(batch_x)
+                    
+                    if self.model.transform_y:
+                        batch_y = self.model.transform_y(batch_y)
                     
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)

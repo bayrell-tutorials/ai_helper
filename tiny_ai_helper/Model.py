@@ -122,6 +122,14 @@ class Model:
         self.to( torch.device("cpu") )
     
     
+    def train(self):
+        self.module.train()
+    
+    
+    def eval(self):
+        self.module.eval()
+    
+    
     def load_file(self, file_path):
         
         """
@@ -271,7 +279,6 @@ class Model:
         if self.device:
             x = x.to( self.device )
         
-        self.module.eval()
         y = self.module(x)
         
         return y
@@ -300,7 +307,7 @@ class Model:
         for batch_x, batch_y in loader:
             
             if self.transform_x:
-                bath_x = self.transform_x(bath_x)
+                batch_x = self.transform_x(batch_x)
             
             if self.device:
                 batch_x = batch_to(batch_x, self.device)
@@ -434,7 +441,7 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, dataset: TensorDataset):
+    def summary(self, x):
         
         """
         Show model summary
@@ -492,27 +499,45 @@ class Model:
         def add_hooks(module):
             hooks.append(module.register_forward_hook(forward_hook))
         
-        # Get input tensor
-        if self.transform_x is not None:
-            dataset = TransformDataset(
-                dataset,
-                transform_x=self.transform_x
+        # Get batch from Dataset
+        if isinstance(x, torch.utils.data.Dataset):
+            loader = DataLoader(
+                x,
+                batch_size=2,
+                drop_last=False,
+                shuffle=False
             )
+            it = loader._get_iterator()
+            
+            x, _ = next(it)
         
-        loader = DataLoader(
-            dataset,
-            batch_size=2,
-            drop_last=False,
-            shuffle=False
-        )
-        it = loader._get_iterator()
+        # Trasform
+        if self.transform_x is not None:
+            x = self.transform_x(x)
         
-        x, _ = next(it)
+        # Move to device
         x = batch_to(x, self.device)
         
         # Add input size
-        params, size = tensor_size(x)
-        res["total_size"] += size
+        if isinstance(x, list):
+            shapes = []
+            for i in range(len(x)):
+                params, size = tensor_size(x[i])
+                shapes.append(x[i].shape)
+            res["total_size"] += size
+            layers.append({
+                "name": "Input",
+                "shape": shapes,
+                "params": 0
+            })
+        else:
+            params, size = tensor_size(x)
+            res["total_size"] += size
+            layers.append({
+                "name": "Input",
+                "shape": x.shape,
+                "params": 0
+            })
         
         # Module predict
         module: torch.nn.Module = self.module
@@ -541,8 +566,14 @@ class Model:
         print( "-" * width )
         
         for i, layer in enumerate(layers):
-            shape = "(" + ", ".join(map(str,layer["shape"])) + ")"
-            print( format_row(res, [i + 1, layer["name"], shape, layer["params"]]) )
+            shape = layer["shape"]
+            shape_str = ""
+            if isinstance(shape, list):
+                shape = [ "(" + ", ".join(map(str,s)) + ")" for s in shape ]
+                shape_str = "[" + ", ".join(shape) + "]"
+            else:
+                shape_str = "(" + ", ".join(map(str,shape)) + ")"
+            print( format_row(res, [i + 1, layer["name"], shape_str, layer["params"]]) )
         
         print( "-" * width )
         print( f"Model name: {self.name}" )
