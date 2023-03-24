@@ -140,6 +140,30 @@ class Trainer:
         self.do_training = False
     
     
+    def calc_metrics(self, kind, batch_x, batch_y, batch_predict, loss_value):
+        
+        """
+        Calc metrics
+        """
+        
+        get_acc_fn = self.model.acc_fn
+        acc = get_acc_fn(batch_predict, batch_y)
+        loss_value_item = loss_value.item()
+        batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
+        
+        if kind == "train":
+            self.acc_train = self.acc_train + acc
+            self.loss_train = self.loss_train + loss_value_item
+            self.count_train = self.count_train + batch_count
+            self.batch_iter = self.batch_iter + batch_count
+        
+        elif kind == "valid":
+            self.acc_val = self.acc_val + acc
+            self.loss_val = self.loss_val + loss_value_item
+            self.count_val = self.count_val + batch_count
+            self.batch_iter = self.batch_iter + batch_count
+    
+    
     def fit(self, model, train_dataset, val_dataset, batch_size=64, epochs=10):
         
         """
@@ -171,16 +195,15 @@ class Trainer:
             self.model.to(self.device)
         
         module = self.model.module
-        get_acc_fn = self.model.acc_fn
         
         try:
             self.epoch = self.model.epoch
-            self.do_trainin = True
+            self.do_training = True
             
             # Start train
             self.on_start_train()
             
-            while self.do_trainin and not self.check_is_trained():
+            while self.do_training and not self.check_is_trained():
                 
                 self.loss_train = 0
                 self.loss_val = 0
@@ -204,19 +227,19 @@ class Trainer:
                     if self.model.transform_y:
                         batch_y = self.model.transform_y(batch_y)
                     
-                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
                     
+                    # Start batch
                     self.on_start_batch_train(batch_x, batch_y)
                     
                     # Predict
-                    model_predict = module(batch_x)
-                    loss_value = self.model.loss(model_predict, batch_y)
-                    loss_value_item = loss_value.item()
-                    acc = get_acc_fn(model_predict, batch_y)
+                    batch_predict = module(batch_x)
+                    loss_value = self.model.loss(batch_predict, batch_y)
                     
-                    del batch_x, batch_y
+                    # Calc metrics
+                    self.calc_metrics("train", batch_x, batch_y, batch_predict, loss_value)
+                    del batch_x, batch_y, batch_predict
                     
                     # Вычислим градиент
                     self.model.optimizer.zero_grad()
@@ -226,16 +249,12 @@ class Trainer:
                     # Оптимизируем
                     self.model.optimizer.step()
                     
-                    self.acc_train = self.acc_train + acc
-                    self.loss_train = self.loss_train + loss_value_item
-                    self.count_train = self.count_train + batch_count
-                    self.batch_iter = self.batch_iter + batch_count
-                    
+                    # End batch
                     self.on_end_batch_train()
                   
-                # Clear cache
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                    # Clear cache
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                 
                 module.eval()
                 
@@ -251,23 +270,21 @@ class Trainer:
                     batch_x = batch_to(batch_x, self.device)
                     batch_y = batch_to(batch_y, self.device)
                     
+                    # Start batch
                     self.on_start_batch_val(batch_x, batch_y)
                     
                     # Predict
-                    model_predict = module(batch_x)
-                    loss_value = self.model.loss(model_predict, batch_y)
-                    acc = get_acc_fn(model_predict, batch_y)
+                    batch_predict = module(batch_x)
+                    loss_value = self.model.loss(batch_predict, batch_y)
                     
-                    batch_count = len(batch_x[0]) if isinstance(batch_x, list) else len(batch_x)
-                    self.acc_val = self.acc_val + acc
-                    self.loss_val = self.loss_val + loss_value.item()
-                    self.count_val = self.count_val + batch_count
-                    self.batch_iter = self.batch_iter + batch_count
+                    # Calc metrics
+                    self.calc_metrics("valid", batch_x, batch_y, batch_predict, loss_value)
+                    del batch_x, batch_y, batch_predict, loss_value
                     
+                    # End batch
                     self.on_end_batch_val()
                     
                     # Clear cache
-                    del batch_x, batch_y, loss_value
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
@@ -278,6 +295,7 @@ class Trainer:
                 self.on_end_epoch()
             
             self.on_end_train()
+            self.do_training = False
             
         except KeyboardInterrupt:
             
