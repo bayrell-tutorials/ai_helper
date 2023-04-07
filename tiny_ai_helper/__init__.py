@@ -10,7 +10,7 @@ from .Model import Model
 from .Trainer import Trainer
 from .mp import save_features, save_features_mp
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 __all__ = (
     "Model",
