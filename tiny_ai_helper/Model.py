@@ -9,7 +9,7 @@
 import torch, time, json, math, gc, os
 from torch.utils.data import DataLoader, TensorDataset
 from .utils import TransformDataset, list_files, \
-    get_default_device, batch_to, tensor_size, load_json
+    get_default_device, batch_to, tensor_size, load_json, summary
 
 
 class Model:

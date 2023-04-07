@@ -32,7 +32,8 @@ class Trainer:
         self.max_best_models = 5
         self.min_epoch = 5
         self.max_epoch = 10
-        self.min_loss_val = 1e-5
+        self.min_loss_val = -1
+        self.min_lr = 1e-5
         self.do_training = False
         
     
@@ -45,7 +46,12 @@ class Trainer:
         if self.epoch >= self.max_epoch:
             return True
         
-        if self.loss_val < self.min_loss_val and self.epoch >= self.min_epoch:
+        if self.count_val > 0 and \
+            (self.loss_val / self.count_val) < self.min_loss_val and \
+            self.epoch >= self.min_epoch:
+            return True
+        
+        if self.model.optimizer.param_groups[0]["lr"] < self.min_lr:
             return True
         
         return False

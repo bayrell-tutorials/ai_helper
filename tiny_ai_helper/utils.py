@@ -6,7 +6,7 @@
 # License: MIT
 ##
 
-import torch, math, json, os
+import torch, math, json, os, re
 import numpy as np
 from torch import nn
 from PIL import Image, ImageDraw
@@ -82,6 +82,8 @@ def label_encoder(labels):
     """
     Returns one hot encoder from label
     """
+    
+    labels = make_index(labels)
     
     def f(label_name):
         
@@ -203,7 +205,7 @@ def create_dataset_indexes(dataset, file_name):
     return index
 
 
-def split_dataset(dataset, k=0.2, index=None):
+def split_dataset(dataset, k=0.2, indexes=None):
     
     """
     Split dataset for train and validation
@@ -213,11 +215,11 @@ def split_dataset(dataset, k=0.2, index=None):
     train_count = round(sz * (1 - k))
     val_count = sz - train_count
     
-    if index is None:
-        index = list(np.random.permutation(sz))
+    if indexes is None:
+        indexes = list(np.random.permutation(sz))
     
     from torch.utils.data import Subset
-    return [Subset(dataset, index[0 : train_count]), Subset(dataset, index[train_count : ])]
+    return [Subset(dataset, indexes[0 : train_count]), Subset(dataset, indexes[train_count : ])]
     
 
 
@@ -377,6 +379,35 @@ def list_files(path="", recursive=True):
     return items
 
 
+def get_sort_alphanum_key(name):
+    
+    """
+    Returns sort alphanum key
+    """
+    
+    arr = re.split("([0-9]+)", name)
+    
+    for key, value in enumerate(arr):
+        try:
+            value = int(value)
+        except:
+            pass
+        arr[key] = value
+    
+    arr = list(filter(lambda item: item != "", arr))
+    
+    return arr
+
+
+def alphanum_sort(files):
+    
+    """
+    Alphanum sort
+    """
+    
+    files.sort(key=get_sort_alphanum_key)
+
+
 def list_dirs(path=""):
     
     """
@@ -500,7 +531,7 @@ def summary(module, x, model_name=None, transform_x=None, device=None):
         
         # Get batch from Dataset
         if isinstance(x, torch.utils.data.Dataset):
-            loader = DataLoader(
+            loader = torch.utils.data.DataLoader(
                 x,
                 batch_size=2,
                 drop_last=False,
