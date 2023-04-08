@@ -378,10 +378,10 @@ class Model:
         Returns best epoch indexes
         """
         
-        metrics = self.get_metrics(["loss_val", "acc_rel"])
+        metrics = self.get_metrics(["acc_val", "acc_rel"])
         
         def get_key(item):
-            return [item[1], item[2]]
+            return [100 - item[1], item[2]]
 
         metrics.sort(key=get_key)
         
@@ -457,7 +457,7 @@ class Model:
         )
     
     
-    def draw_history(self, ax, metrics=[], label=None, legend=True, convert=None):
+    def draw_history_ax(self, ax, metrics=[], label=None, legend=True, convert=None):
         
         """
         Draw history to axes
@@ -477,28 +477,28 @@ class Model:
             ax.legend()
     
     
-    def show_history(self, metrics=[]):
+    def draw_history(self, metrics=[]):
         
         """
-        Show history
+        Draw history
         """
         
         import matplotlib.pyplot as plt
         
         fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-        self.draw_history(ax[0],
+        self.draw_history_ax(ax[0],
             ["acc_train", "acc_val"],
             label="Accuracy",
             convert=lambda x: x * 100
         )
-        self.draw_history(ax[1],
+        self.draw_history_ax(ax[1],
             ["loss_train", "loss_val"],
             label="Loss"
         )
         plt.show()
     
     
-    def show_history_log(self):
+    def show_history(self):
         
         h = list(self.history.keys())
         h.sort()

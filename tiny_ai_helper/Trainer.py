@@ -7,7 +7,7 @@
 ##
 
 import torch, time
-from .utils import get_default_device, batch_to
+from .utils import get_default_device, batch_to, get_acc_class, get_acc_binary
 from torch.utils.data import DataLoader, TensorDataset
 
 
