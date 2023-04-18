@@ -488,6 +488,8 @@ def summary(module, x, model_name=None, transform_x=None, device=None):
         
         def forward_hook(module, input, output):
             
+            output = output[0] if isinstance(output, tuple) else output
+            
             class_name = module.__class__.__module__ + "." + module.__class__.__name__
             layer = {
                 "name": module.__class__.__name__,
