@@ -164,7 +164,7 @@ def batch_to(x, device):
     Move batch to device
     """
     
-    if isinstance(x, list):
+    if isinstance(x, list) or isinstance(x, tuple):
         for i in range(len(x)):
             x[i] = x[i].to(device)
     else:
@@ -471,7 +471,7 @@ def load_json(file_name):
     return obj
 
 
-def summary(module, x, model_name=None, transform_x=None, device=None):
+def summary(module, x, y=None, model_name=None, batch_transform=None, device=None):
         
         """
         Show model summary
@@ -541,18 +541,21 @@ def summary(module, x, model_name=None, transform_x=None, device=None):
             )
             it = loader._get_iterator()
             
-            x, _ = next(it)
+            x, y = next(it)
+        
+        if batch_transform is None:
+            batch_transform = getattr(module, "batch_transform", None)
         
         # Trasform
-        if transform_x is not None:
-            x = transform_x(x)
+        if batch_transform is not None:
+            x, _ = batch_transform(x, y)
         
         # Move to device
         if device is not None:
             x = batch_to(x, device)
         
         # Add input size
-        if isinstance(x, list):
+        if isinstance(x, list) or isinstance(x, tuple):
             shapes = []
             for i in range(len(x)):
                 params, size = tensor_size(x[i])

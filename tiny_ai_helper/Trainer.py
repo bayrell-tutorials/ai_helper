@@ -98,8 +98,8 @@ class Trainer:
         res_lr_str = str(res_lr)
         
         # Результат обучения
-        loss_train = '%.3e' % (self.loss_train / self.count_train)
-        loss_val = '%.3e' % (self.loss_val / self.count_val)
+        loss_train = '%.3e' % (self.loss_train / self.batch_train)
+        loss_val = '%.3e' % (self.loss_val / self.batch_val)
         
         acc_train = self.acc_train / self.count_train
         acc_val = self.acc_val / self.count_val
@@ -121,8 +121,8 @@ class Trainer:
         # Update model history
         self.model.epoch = self.epoch
         self.model.history[self.epoch] = {
-            "loss_train": self.loss_train / self.count_train,
-            "loss_val": self.loss_val / self.count_val,
+            "loss_train": self.loss_train / self.batch_train,
+            "loss_val": self.loss_val / self.batch_val,
             "acc_train": self.acc_train / self.count_train,
             "acc_val": self.acc_val / self.count_val,
             "acc_rel": acc_rel,
@@ -161,12 +161,14 @@ class Trainer:
             self.acc_train = self.acc_train + acc
             self.loss_train = self.loss_train + loss_value_item
             self.count_train = self.count_train + batch_count
+            self.batch_train = self.batch_train + 1
             self.batch_iter = self.batch_iter + batch_count
         
         elif kind == "valid":
             self.acc_val = self.acc_val + acc
             self.loss_val = self.loss_val + loss_value_item
             self.count_val = self.count_val + batch_count
+            self.batch_val = self.batch_val + 1
             self.batch_iter = self.batch_iter + batch_count
     
     
@@ -217,6 +219,8 @@ class Trainer:
                 self.acc_val = 0
                 self.count_train = 0
                 self.count_val = 0
+                self.batch_train = 0
+                self.batch_val = 0
                 self.batch_iter = 0
                 self.epoch = self.epoch + 1
                 self.time_start = time.time()
