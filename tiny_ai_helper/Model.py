@@ -14,11 +14,11 @@ from .utils import TransformDataset, list_files, \
 
 class Model:
     
-    def __init__(self, name=None):
+    def __init__(self, module=None, name=None):
         self.device = None
         self.transform_x = None
         self.transform_y = None
-        self.module = None
+        self.module = module
         self.optimizer = None
         self.scheduler = None
         self.loss = None
@@ -74,8 +74,8 @@ class Model:
         return self
     
     
-    def init(self, acc=None, optimizer=None, loss=None, scheduler=None, lr=1e-3,
-        transform_x=None, transform_y=None):
+    def init(self, acc=None, optimizer=None, loss=None, scheduler=None,
+        lr=1e-3, transform_x=None, transform_y=None):
         
         """
         Init model

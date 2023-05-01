@@ -617,3 +617,171 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         print( f"Trainable params: {res['params_train_count']}" )
         print( f"Total size: {res['total_size']} MiB" )
         print( "=" * width )
+
+
+def fit(model, train_dataset, val_dataset,
+    batch_size=64, epochs=10, device=None,
+    min_lr=1e-5, reduction='mean'
+):
+    
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    module = model.module
+    optimizer = model.optimizer
+    scheduler = model.scheduler
+    loss_fn = model.loss
+    
+    batch_transform = getattr(module, "batch_transform", None)
+    
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        drop_last=False,
+        shuffle=True
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        drop_last=False,
+        shuffle=False
+    )
+    
+    module = module.to(device)
+    
+    print ("Start train")
+    try:
+        for epoch in range(epochs):
+            
+            time_start = time.time()
+            train_count = 0
+            train_loss = 0
+            train_iter = 0
+            val_count = 0
+            val_loss = 0
+            val_iter = 0
+            total_count = len(train_dataset) + len(val_dataset)
+            pos = 0
+            
+            # train mode
+            module.train()
+            
+            for x_batch, y_batch in train_loader:
+                
+                # data to device
+                x_batch = x_batch.to(device)
+                y_batch = y_batch.to(device)
+                if batch_transform:
+                    x_batch, y_batch = batch_transform(x_batch, y_batch)
+                
+                # set parameter gradients to zero
+                optimizer.zero_grad()
+                
+                # forward
+                y_pred = module(x_batch)
+                loss = loss_fn(y_pred, y_batch)
+                loss.backward()
+                optimizer.step()
+
+                # add metrics
+                batch_len = len(x_batch[0]) \
+                    if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
+                    else len(x_batch)
+                train_loss += loss
+                train_count += batch_len
+                train_iter += 1
+                pos += batch_len
+
+                del x_batch, y_batch, y_pred, loss
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                print(f"\r{round(pos / total_count * 100)}%", end="")
+
+            
+            with torch.no_grad():
+
+                # testing mode
+                module.eval()
+                
+                for x_batch, y_batch in val_loader:
+                    
+                    # data to device
+                    x_batch = x_batch.to(device)
+                    y_batch = y_batch.to(device)
+                    if batch_transform:
+                        x_batch, y_batch = batch_transform(x_batch, y_batch)
+                    
+                    # forward
+                    y_pred = module(x_batch)
+                    loss = loss_fn(y_pred, y_batch)
+                    
+                    # add metrics
+                    batch_len = len(x_batch[0]) \
+                        if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
+                        else len(x_batch)
+                    val_loss += loss
+                    val_count += batch_len
+                    val_iter += 1
+                    pos += batch_len
+                    
+                    del x_batch, y_batch, y_pred, loss
+
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    
+                    print(f"\r{round(pos / total_count * 100)}%", end="")
+            
+            if reduction == "mean":
+                train_loss = (train_loss / train_iter).item()
+                val_loss = (val_loss / val_iter).item()
+            
+            elif reduction == "sum":
+                train_loss = (train_loss / train_count).item()
+                val_loss = (val_loss / val_count).item()
+            
+            scheduler.step(val_loss)
+            
+            # Current lr
+            res_lr = []
+            for param_group in optimizer.param_groups:
+                res_lr.append( round(param_group['lr'], 7) )
+            res_lr_str = str(res_lr)
+            
+            time_end = time.time()
+            t = round(time_end - time_start)
+            
+            h = {
+                "loss_train": train_loss,
+                "loss_val": val_loss,
+                "count_train": train_count,
+                "count_val": val_count,
+                "res_lr": res_lr,
+                "time": t,
+            }
+            
+            model.history[epoch] = h
+            
+            # Print result
+            train_loss = "{:.9f}".format(train_loss)
+            val_loss = "{:.9f}".format(val_loss)
+            
+            print(f'\repoch: {epoch + 1}, ' +
+                'train_loss: {train_loss}, val_loss: {val_loss}, ' +
+                'lr: {res_lr_str}, t: {t}s')
+            
+            if res_lr[0] < min_lr:
+                break
+
+        print ("Ok")
+
+    except KeyboardInterrupt:
+        
+        print ("")
+        print ("Stopped manually")
+        print ("")
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
