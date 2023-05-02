@@ -480,7 +480,6 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         hooks = []
         layers = []
         res = {
-            "layer_name_max": 10,
             "params_count": 0,
             "params_train_count": 0,
             "total_size": 0,
@@ -497,9 +496,6 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
                 "shape": output.shape,
                 "params": 0
             }
-            
-            if res["layer_name_max"] < len(module.__class__.__name__):
-                res["layer_name_max"] = len(module.__class__.__name__)
             
             # Get weight
             if hasattr(module, "weight"):
@@ -587,19 +583,10 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         for item in hooks:
             item.remove()
         
-        # Print info
-        def format_row(res, args):
-            layer_name_max = res["layer_name_max"] + 5
-            s = "{:<5} {:>"+str(layer_name_max)+"} {:>20} {:>15}"
-            return s.format(*args)
-        
         res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
         
-        width = 63
-        print( "=" * width )
-        print( format_row(res, ["", "Layer", "Output", "Params"]) )
-        print( "-" * width )
-        
+        # Calc info
+        values = [ ["", "Layer", "Output", "Params"] ]
         for i, layer in enumerate(layers):
             shape = layer["shape"]
             shape_str = ""
@@ -608,7 +595,29 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
                 shape_str = "[" + ", ".join(shape) + "]"
             else:
                 shape_str = "(" + ", ".join(map(str,shape)) + ")"
-            print( format_row(res, [i + 1, layer["name"], shape_str, layer["params"]]) )
+            
+            values.append([i + 1, layer["name"], shape_str, layer["params"]])
+        
+        # Print info
+        info_sizes = [2, 7, 7, 5]
+        for _, value in enumerate(values):
+            for i in range(4):
+                sz = len(str(value[i]))
+                if info_sizes[i] < sz:
+                    info_sizes[i] = sz
+            
+        def format_row(arr, size):
+            s = "{:<"+str(size[0] + 1)+"} {:>"+str(size[1] + 2)+"}" + \
+                "{:>"+str(size[2] + 3)+"} {:>"+str(size[3] + 2)+"}"
+            return s.format(*arr)
+        
+        width = 63
+        print( "=" * width )
+        print( format_row(["", "Layer", "Output", "Params"], info_sizes) )
+        print( "-" * width )
+        
+        for _, value in enumerate(values):
+            print( format_row(value, info_sizes) )
         
         print( "-" * width )
         if model_name is not None:
