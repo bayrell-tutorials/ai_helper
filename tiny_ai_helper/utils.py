@@ -608,10 +608,10 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
             
         def format_row(arr, size):
             s = "{:<"+str(size[0] + 1)+"} {:>"+str(size[1] + 2)+"}" + \
-                "{:>"+str(size[2] + 3)+"} {:>"+str(size[3] + 2)+"}"
+                "{:>"+str(size[2] + 5)+"} {:>"+str(size[3] + 5)+"}"
             return s.format(*arr)
         
-        width = 63
+        width = info_sizes[0] + 1 + info_sizes[1] + 2 + info_sizes[2] + 5 + info_sizes[3] + 5 + 2
         print( "=" * width )
         print( format_row(["", "Layer", "Output", "Params"], info_sizes) )
         print( "-" * width )
