@@ -36,6 +36,7 @@ case "$1" in
 	;;
 	
 	clean)
+		rm -rf build/*
 		rm -rf dist/*
 	;;
 	
