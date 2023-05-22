@@ -178,7 +178,10 @@ def tensor_size(t):
     """
     Returns tensor size
     """
-
+    
+    if not isinstance(t, torch.Tensor):
+        return 0, 0
+    
     sz = t.element_size()
     shape = t.shape
     params = 1
@@ -498,7 +501,7 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
             }
             
             # Get weight
-            if hasattr(module, "weight"):
+            if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
                 params, size = tensor_size(module.weight)
                 res["params_count"] += params
                 res["total_size"] += size
@@ -508,7 +511,7 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
                     res["params_train_count"] += params
             
             # Get bias
-            if hasattr(module, "bias"):
+            if hasattr(module, "bias") and isinstance(module.bias, torch.Tensor):
                 params, size = tensor_size(module.bias)
                 res["params_count"] += params
                 res["total_size"] += size
@@ -586,7 +589,7 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
         
         # Calc info
-        values = [ ["", "Layer", "Output", "Params"] ]
+        values = []
         for i, layer in enumerate(layers):
             shape = layer["shape"]
             shape_str = ""
