@@ -27,11 +27,14 @@ class Model:
         self.best_metrics = ["val_acc_value", "rel", "epoch"]
         self.acc_fn = None
         self.name = module.__class__.__name__
-        self.set_repository_path("model")
+        self.prefix_name = ""
         self.epoch = 0
         self.history = {}
         self.min_lr = 1e-5
         self.max_best_models = 10
+        self.model_path = ""
+        self.repository_path = ""
+        self.set_repository_path("model")
     
     
     def set_module(self, module):
@@ -56,6 +59,12 @@ class Model:
     
     def set_name(self, name):
         self.name = name
+        self.set_repository_path(self.repository_path)
+        return self
+    
+    def set_prefix_name(self, prefix_name):
+        self.prefix_name = prefix_name
+        self.set_repository_path(self.repository_path)
         return self
     
     def set_path(self, model_path):
@@ -63,8 +72,14 @@ class Model:
         return self
     
     def set_repository_path(self, repository_path):
-        self.model_path = os.path.join(repository_path, self.name)
+        self.repository_path = repository_path
+        self.model_path = os.path.join(repository_path, self.get_full_name())
         return self
+    
+    def get_full_name(self):
+        if self.prefix_name != "":
+            return self.name + "_" + self.prefix_name
+        return self.name
     
     
     def init(self):
@@ -209,7 +224,7 @@ class Model:
         
         # Get metrics
         save_metrics = {}
-        save_metrics["name"] = self.name
+        save_metrics["name"] = self.get_full_name()
         save_metrics["epoch"] = self.epoch
         save_metrics["history"] = self.history.copy()
         save_metrics["module"] = self.module.state_dict()
@@ -461,7 +476,7 @@ class Model:
         
         summary(self.module, x, y,
             device=self.device,
-            model_name=self.name
+            model_name=self.get_full_name()
         )
     
     
@@ -495,12 +510,12 @@ class Model:
         
         fig, ax = plt.subplots(1, 2, figsize=(10, 4))
         self.draw_history_ax(ax[0],
-            ["acc_train", "acc_val"],
+            ["train_acc_value", "val_acc_value"],
             label="Accuracy",
             convert=lambda x: x * 100
         )
         self.draw_history_ax(ax[1],
-            ["loss_train", "loss_val"],
+            ["train_loss", "val_loss"],
             label="Loss"
         )
         plt.show()

@@ -626,9 +626,9 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         print( "-" * width )
         if model_name is not None and model_name != module.__class__.__name__:
             print( f"Model name: {model_name}" )
-        print( f"Total params: {res['params_count']}" )
-        print( f"Trainable params: {res['params_train_count']}" )
-        print( f"Total size: {res['total_size']} MiB" )
+        print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
+        print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
+        #print( f"Total size: {res['total_size']} MiB" )
         print( "=" * width )
 
 
