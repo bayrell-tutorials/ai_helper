@@ -358,11 +358,22 @@ class Model:
             print ("\nOk")
     
     
-    def get_metrics(self, metric_name):
+    def get_metrics(self, metric_name, convert=False):
         
         """
         Returns metrics by name
         """
+        
+        def convert_value(value, metric_name):
+            if (
+                metric_name == "train_acc" or
+                metric_name == "train_acc_value" or
+                metric_name == "val_acc" or
+                metric_name == "val_acc_value" or
+                metric_name == "epoch"
+            ):
+                return -value
+            return value
         
         res = []
         epochs = list(self.history.keys())
@@ -373,10 +384,16 @@ class Model:
             
             if isinstance(metric_name, list):
                 for name in metric_name:
-                    res2.append( epoch[name] if name in epoch else 0 )
+                    value = epoch[name] if name in epoch else 0
+                    if convert:
+                        value = convert_value(value, name)
+                    res2.append( value )
             
             else:
-                res2.append( epoch[metric_name] if metric_name in epoch else 0 )
+                value = epoch[metric_name] if metric_name in epoch else 0
+                if convert:
+                    value = convert_value(value, metric_name)
+                res2.append( value )
             
             res.append(res2)
             
@@ -400,12 +417,8 @@ class Model:
         Returns best epoch indexes
         """
         
-        metrics = self.get_metrics(self.best_metrics)
-        
-        def get_key(item):
-            return [100 - item[1], item[2]]
-
-        metrics.sort(key=get_key)
+        metrics = self.get_metrics(self.best_metrics, convert=True)
+        metrics.sort(key=lambda x: x[1:])
         
         res = []
         res_count = 0
