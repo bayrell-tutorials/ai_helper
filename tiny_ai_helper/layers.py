@@ -13,13 +13,27 @@ from PIL import Image, ImageDraw
 from .utils import resize_image
 
 
+class Lambda(torch.nn.Module):
+    
+    """
+    Lambda layer
+    """
+    
+    def __init__(self, f):
+        torch.nn.Module.__init__(self)
+        self.f=f
+    
+    def forward(self, x):
+        return self.f(x)
+
+
 class InsertFirstAxis(torch.nn.Module):
     
     """
     Insert first Axis for convolution layer
     """
     
-    def __call__(self, t):
+    def forward(self, t):
         t = t[:,None,:]
         return t
 
@@ -30,14 +44,14 @@ class InsertLastAxis(torch.nn.Module):
     Insert last Axis for convolution layer
     """
     
-    def __call__(self, t):
+    def forward(self, t):
         t = t[:,None]
         return t
 
 
 class MoveRGBToEnd(torch.nn.Module):
         
-    def __call__(self, t):
+    def forward(self, t):
         l = len(t.shape)
         t = torch.moveaxis(t, l-3, l-1)
         return t
@@ -45,7 +59,7 @@ class MoveRGBToEnd(torch.nn.Module):
 
 class MoveRGBToBegin(torch.nn.Module):
         
-    def __call__(self, t):
+    def forward(self, t):
         l = len(t.shape)
         t = torch.moveaxis(t, l-1, l-3)
         return t
@@ -53,7 +67,7 @@ class MoveRGBToBegin(torch.nn.Module):
 
 class ToIntImage(torch.nn.Module):
     
-    def __call__(self, t):
+    def forward(self, t):
         
         t = t * 255
         t = t.to(torch.uint8)
@@ -63,7 +77,7 @@ class ToIntImage(torch.nn.Module):
 
 class ToFloatImage(torch.nn.Module):
     
-    def __call__(self, t):
+    def forward(self, t):
         
         t = t.to(torch.float)
         t = t / 255.0
@@ -73,7 +87,7 @@ class ToFloatImage(torch.nn.Module):
 
 class ToFloat(torch.nn.Module):
     
-    def __call__(self, t):
+    def forward(self, t):
         
         t = t.to(torch.float)
         
@@ -83,10 +97,10 @@ class ToFloat(torch.nn.Module):
 class ReadImage(torch.nn.Module):
     
     def __init__(self, mode=None):
-        
+        torch.nn.Module.__init__(self)
         self.mode=mode
     
-    def __call__(self, batch):
+    def forward(self, batch):
         
         res = []
         for t in batch:
@@ -103,7 +117,7 @@ class ReadImage(torch.nn.Module):
 
 class ImageToTensor(torch.nn.Module):
     
-    def __call__(self, batch):
+    def forward(self, batch):
         
         res = torch.tensor([])
         for t in batch:
@@ -125,7 +139,7 @@ class ResizeImage(torch.nn.Module):
         self.contain = contain
         self.color = color
     
-    def __call__(self, batch):
+    def forward(self, batch):
         
         res = []
         for t in batch:
@@ -148,7 +162,7 @@ class NormalizeImage(torch.nn.Module):
         self.inplace = inplace
         self.normalize = torchvision.transforms.Normalize(mean=mean, std=std, inplace=inplace)
     
-    def __call__(self, t):
+    def forward(self, t):
         
         t = self.normalize(t)
         
@@ -199,7 +213,9 @@ class PreparedModule(torch.nn.Module):
 class Stacking(torch.nn.Module):
     
     def __init__(self, *args, is_tensor_list=True):
+        
         torch.nn.Module.__init__(self)
+        
         for i, module in enumerate(args):
             self.add_module(str(i), module)
         
@@ -240,9 +256,10 @@ class Stacking(torch.nn.Module):
 
 class Pipe():
     def __init__(self, *args):
+        torch.nn.Module.__init__(self)
         self.pipe = args
     
-    def __call__(self, value):
+    def forward(self, value):
         for fn in self.pipe:
             value = fn(value)
         return value

@@ -8,14 +8,13 @@
 
 from .Model import Model
 from .Trainer import Trainer
-from .mp import save_features, save_features_mp
+from .utils import compile, fit
 
 __version__ = "0.1.7-2"
 
 __all__ = (
     "Model",
     "Trainer",
-    "DatasetPredict",
-    "save_features",
-    "save_features_mp",
+    "compile",
+    "fit",
 )

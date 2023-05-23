@@ -6,9 +6,10 @@
 # License: MIT
 ##
 
-import torch, math, json, os, re
+import torch, math, json, os, re, time
 import numpy as np
 from torch import nn
+from torch.utils.data import Dataset, DataLoader
 from PIL import Image, ImageDraw
 
 
@@ -623,7 +624,7 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
             print( format_row(value, info_sizes) )
         
         print( "-" * width )
-        if model_name is not None:
+        if model_name is not None and model_name != module.__class__.__name__:
             print( f"Model name: {model_name}" )
         print( f"Total params: {res['params_count']}" )
         print( f"Trainable params: {res['params_train_count']}" )
@@ -631,20 +632,17 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         print( "=" * width )
 
 
-def fit(model, train_dataset, val_dataset,
-    batch_size=64, epochs=10, device=None,
-    min_lr=1e-5, reduction='mean'
-):
+def compile(module):
+    from .Model import Model
+    return Model(module)
+
+
+def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
+    
+    device = model.device
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
-    module = model.module
-    optimizer = model.optimizer
-    scheduler = model.scheduler
-    loss_fn = model.loss
-    
-    batch_transform = getattr(module, "batch_transform", None)
     
     train_loader = DataLoader(
         train_dataset,
@@ -659,24 +657,37 @@ def fit(model, train_dataset, val_dataset,
         shuffle=False
     )
     
-    module = module.to(device)
+    acc_fn = model.acc_fn
+    device = model.device
+    loss_fn = model.loss
+    min_lr = model.min_lr
+    module = model.module
+    optimizer = model.optimizer
+    scheduler = model.scheduler
     
-    print ("Start train")
+    batch_transform = getattr(module, "batch_transform", None)
+    
+    print ("Start train on " + device)
     try:
-        for epoch in range(epochs):
+        while model.do_training(epochs):
             
             time_start = time.time()
             train_count = 0
             train_loss = 0
             train_iter = 0
+            train_acc = 0
             val_count = 0
             val_loss = 0
             val_iter = 0
+            val_acc = 0
             total_count = len(train_dataset) + len(val_dataset)
             pos = 0
             
+            model.epoch = model.epoch + 1
+            epoch = model.epoch
+            
             # train mode
-            module.train()
+            model.train()
             
             for x_batch, y_batch in train_loader:
                 
@@ -703,19 +714,30 @@ def fit(model, train_dataset, val_dataset,
                 train_count += batch_len
                 train_iter += 1
                 pos += batch_len
+                
+                train_acc_val = 0
 
+                # Calc accuracy
+                if acc_fn is not None:
+                    train_acc += acc_fn(y_pred, y_batch)
+                    train_acc_val = round(train_acc / train_count * 10000) / 100
+                
                 del x_batch, y_batch, y_pred, loss
 
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
-                print(f"\r{round(pos / total_count * 100)}%", end="")
-
+                iter_value = round(pos / total_count * 100)
+                if train_acc_val > 0:
+                    print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(train_acc_val), end="")
+                else:
+                    print(f"\rEpoch: {epoch}, {iter_value}%", end="")
+            
             
             with torch.no_grad():
 
                 # testing mode
-                module.eval()
+                model.eval()
                 
                 for x_batch, y_batch in val_loader:
                     
@@ -738,50 +760,67 @@ def fit(model, train_dataset, val_dataset,
                     val_iter += 1
                     pos += batch_len
                     
+                    val_acc_val = 0
+                    
+                    # Calc accuracy
+                    if acc_fn is not None:
+                        val_acc += acc_fn(y_pred, y_batch)
+                        val_acc_val = round(val_acc / val_count * 10000) / 100
+                    
                     del x_batch, y_batch, y_pred, loss
 
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
-                    print(f"\r{round(pos / total_count * 100)}%", end="")
+                    iter_value = round(pos / total_count * 100)
+                    if val_acc_val > 0:
+                        print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(val_acc_val), end="")
+                    else:
+                        print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
-            if reduction == "mean":
+            
+            if model.loss_reduction == "mean":
                 train_loss = (train_loss / train_iter).item()
                 val_loss = (val_loss / val_iter).item()
             
-            elif reduction == "sum":
+            elif model.loss_reduction == "sum":
                 train_loss = (train_loss / train_count).item()
                 val_loss = (val_loss / val_count).item()
             
-            scheduler.step(val_loss)
+            if scheduler is not None:
+               scheduler.step(val_loss)
             
             # Current lr
             res_lr = []
             for param_group in optimizer.param_groups:
                 res_lr.append( round(param_group['lr'], 7) )
-            res_lr_str = str(res_lr)
             
             time_end = time.time()
             t = round(time_end - time_start)
             
+            train_acc_value = (train_acc / train_count) if train_count > 0 else 0
+            val_acc_value = (val_acc / val_count) if train_count > 0 else 0
+            
             h = {
-                "loss_train": train_loss,
-                "loss_val": val_loss,
-                "count_train": train_count,
-                "count_val": val_count,
+                "epoch": epoch,
+                "rel": (train_acc_value / val_acc_value) if val_acc_value > 0 else 0,
                 "res_lr": res_lr,
                 "time": t,
+                "train_acc": train_acc,
+                "train_acc_value": train_acc_value,
+                "train_count": train_count,
+                "train_loss": train_loss,
+                "val_acc": val_acc,
+                "val_acc_value": val_acc_value,
+                "val_count": val_count,
+                "val_loss": val_loss,
             }
             
             model.history[epoch] = h
+            print( model.get_epoch_string(epoch) )
             
-            # Print result
-            train_loss = "{:.9f}".format(train_loss)
-            val_loss = "{:.9f}".format(val_loss)
-            
-            print(f'\repoch: {epoch + 1}, ' +
-                'train_loss: {train_loss}, val_loss: {val_loss}, ' +
-                'lr: {res_lr_str}, t: {t}s')
+            model.save_epoch()
+            model.save_the_best_models()
             
             if res_lr[0] < min_lr:
                 break

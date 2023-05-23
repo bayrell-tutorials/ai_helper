@@ -9,12 +9,12 @@
 import torch, time, json, math, gc, os
 from torch.utils.data import DataLoader, TensorDataset
 from .utils import TransformDataset, list_files, \
-    get_default_device, batch_to, tensor_size, load_json, summary
+    get_default_device, batch_to, tensor_size, load_json, summary, fit
 
 
 class Model:
     
-    def __init__(self, module=None, name=None):
+    def __init__(self, module=None):
         self.device = None
         self.transform_x = None
         self.transform_y = None
@@ -22,115 +22,93 @@ class Model:
         self.optimizer = None
         self.scheduler = None
         self.loss = None
+        self.loss_reduction = 'mean'
+        self.loss_precision = 9
+        self.best_metrics = ["val_acc_value", "rel", "epoch"]
         self.acc_fn = None
-        self.name = name
-        self.model_path = None
+        self.name = module.__class__.__name__
+        self.set_repository_path("model")
         self.epoch = 0
         self.history = {}
-    
-    
-    def set_transform_x(self, transform_x):
-        self.transform_x = transform_x
-        return self
-    
-    
-    def set_transform_y(self, transform_y):
-        self.transform_y = transform_y
-        return self
+        self.min_lr = 1e-5
+        self.max_best_models = 10
     
     
     def set_module(self, module):
         self.module = module
         return self
     
-    
     def set_optimizer(self, optimizer):
         self.optimizer = optimizer
         return self
-    
     
     def set_loss(self, loss):
         self.loss = loss
         return self
     
-    
     def set_scheduler(self, scheduler):
         self.scheduler = scheduler
         return self
-    
     
     def set_acc(self, acc):
         self.acc_fn = acc
         return self
     
-    
     def set_name(self, name):
         self.name = name
         return self
-    
     
     def set_path(self, model_path):
         self.model_path = model_path
         return self
     
+    def set_repository_path(self, repository_path):
+        self.model_path = os.path.join(repository_path, self.name)
+        return self
     
-    def init(self, acc=None, optimizer=None, loss=None, scheduler=None,
-        lr=1e-3, transform_x=None, transform_y=None):
+    
+    def init(self):
         
         """
         Init model
         """
-        
-        if acc is not None:
-            self.acc_fn = acc
-        
-        if transform_x is not None:
-            self.transform_x = transform_x
-        
-        if transform_y is not None:
-            self.transform_y = transform_y
-        
-        if loss is not None:
-            self.loss = loss
-        
-        if optimizer is not None:
-            self.optimizer = optimizer
-        
-        if scheduler is not None:
-            self.scheduler = scheduler
         
         if self.loss is None:
             self.loss = torch.nn.MSELoss()
         
         if self.optimizer is None:
             try:
-                self.optimizer = torch.optim.Adam(self.module.parameters(), lr=lr)
+                self.optimizer = torch.optim.Adam(self.module.parameters(), lr=1e-3)
             except:
                 pass
         
         if self.scheduler is None and self.optimizer is not None:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
         
+        return self
+    
     
     def to(self, device):
         self.module = self.module.to(device)
         self.device = device
+        return self
     
-    
-    def to_gpu(self):
-        self.to( get_default_device() )
+    def to_cuda(self):
+        self.to( torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu') )
+        return self
     
     
     def to_cpu(self):
         self.to( torch.device("cpu") )
-    
+        return self
     
     def train(self):
         self.module.train()
-    
+        return self
     
     def eval(self):
         self.module.eval()
+        return self
     
     
     def load_file(self, file_path):
@@ -270,24 +248,49 @@ class Model:
         file.close()
     
     
-    def predict(self, x, batch_size=64):
+    def do_training(self, max_epochs):
+        
+        """
+        Returns True if model is need to train
+        """
+        
+        if self.epoch >= max_epochs:
+            return False
+        
+        if self.optimizer.param_groups[0]["lr"] < self.min_lr:
+            return False
+        
+        return True
+    
+    
+    def fit(self, train_dataset, val_dataset,
+        batch_size=32, epochs=10
+    ):
+        fit(self, train_dataset, val_dataset,
+            batch_size=batch_size, epochs=epochs)
+    
+    
+    def predict(self, x):
         
         """
         Predict
         """
-         
-        if self.transform_x is not None:
-            x = self.transform_x(x)
         
-        if self.device:
-            x = x.to( self.device )
+        batch_transform = getattr(self.module, "batch_transform", None)
         
-        y = self.module(x)
+        with torch.no_grad():
+            
+            x = x.to(self.device)
+            if batch_transform:
+                x, _ = batch_transform(x)
+            
+            self.module.eval()
+            y = self.module(x)
         
         return y
     
     
-    def predict_dataset(self, dataset, predict, batch_size=64, predict_obj=None):
+    def predict_dataset(self, dataset, predict, batch_size=64, obj=None):
         
         """
         Predict dataset
@@ -300,40 +303,44 @@ class Model:
             shuffle=False
         )
         
-        self.module.eval()
+        batch_transform = getattr(self.module, "batch_transform", None)
         
-        pos = 0
-        next_pos = 0
-        dataset_count = len(dataset)
-        time_start = time.time()
+        with torch.no_grad():
         
-        for batch_x, batch_y in loader:
+            self.module.eval()
             
-            if self.transform_x:
-                batch_x = self.transform_x(batch_x)
+            pos = 0
+            next_pos = 0
+            dataset_count = len(dataset)
+            time_start = time.time()
             
-            if self.device:
-                batch_x = batch_to(batch_x, self.device)
+            for batch_x, batch_y in loader:
+                
+                x_batch = x_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                
+                if batch_transform:
+                    x_batch, y_batch = batch_transform(x_batch, y_batch)
+                
+                batch_predict = self.module(batch_x)
+                predict(batch_x, batch_y, batch_predict, obj)
+                
+                # Show progress
+                pos = pos + len(batch_x)
+                if pos > next_pos:
+                    next_pos = pos + 16
+                    t = str(round(time.time() - time_start))
+                    print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
+                
+                del batch_x, batch_y, batch_predict
+                
+                # Clear cache
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                gc.collect()
             
-            batch_predict = self.module(batch_x)
-            predict(batch_x, batch_y, batch_predict, predict_obj)
-            
-            # Show progress
-            pos = pos + len(batch_x)
-            if pos > next_pos:
-                next_pos = pos + 16
-                t = str(round(time.time() - time_start))
-                print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
-            
-            del batch_x, batch_y, batch_predict
-            
-            # Clear cache
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            
-            gc.collect()
-        
-        print ("\nOk")
+            print ("\nOk")
     
     
     def get_metrics(self, metric_name):
@@ -378,7 +385,7 @@ class Model:
         Returns best epoch indexes
         """
         
-        metrics = self.get_metrics(["acc_val", "acc_rel"])
+        metrics = self.get_metrics(self.best_metrics)
         
         def get_key(item):
             return [100 - item[1], item[2]]
@@ -406,7 +413,7 @@ class Model:
         return res
     
     
-    def save_the_best_models(self, epoch_count=5):
+    def save_the_best_models(self):
         
         """
         Save the best models
@@ -426,6 +433,8 @@ class Model:
             return file_type, epoch_index
         
         
+        epoch_count = self.max_best_models
+        
         if self.epoch > 0 and epoch_count > 0 and os.path.isdir(self.model_path):
             
             epoch_indexes = self.get_the_best_epochs_indexes(epoch_count)
@@ -444,16 +453,15 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, x):
+    def summary(self, x, y=None):
         
         """
         Show model summary
         """
         
-        summary(self.module, x,
+        summary(self.module, x, y,
             device=self.device,
-            model_name=self.name,
-            transform_x=self.transform_x,
+            model_name=self.name
         )
     
     
@@ -477,7 +485,7 @@ class Model:
             ax.legend()
     
     
-    def draw_history(self, metrics=[]):
+    def draw_history(self):
         
         """
         Draw history
@@ -498,34 +506,48 @@ class Model:
         plt.show()
     
     
-    def show_history(self):
+    def print_history(self):
         
         h = list(self.history.keys())
         h.sort()
         
         for epoch in h:
-            
-            res = self.history[epoch]
-            
-            acc_train = res["acc_train"] if "acc_train" in res else 0
-            acc_val = res["acc_val"] if "acc_val" in res else 0
-            acc_rel = res["acc_rel"] if "acc_rel" in res else 0
-            loss_train = res["loss_train"] if "loss_train" in res else 0
-            loss_val = res["loss_val"] if "loss_val" in res else 0
-            res_lr = res["res_lr"] if "res_lr" in res else 0
-            time = res["time"] if "time" in res else 0
-            
-            acc_train = str(round(acc_train * 10000) / 100)
-            acc_val = str(round(acc_val * 10000) / 100)
-            acc_train = acc_train.ljust(5, "0")
-            acc_val = acc_val.ljust(5, "0")
-            acc_rel_str = str(round(acc_rel * 100) / 100).ljust(4, "0")
-            loss_train = '%.3e' % loss_train
-            loss_val = '%.3e' % loss_val
-            res_lr_str = str(res_lr)
-            
-            print (f"Epoch {epoch}, " +
-                f"acc: {acc_train}%, acc_val: {acc_val}%, rel: {acc_rel_str}, " +
-                f"loss: {loss_train}, loss_val: {loss_val}, lr: {res_lr_str}, " +
-                f"t: {time}s"
-            )
+            s = self.get_epoch_string(epoch)
+            print(s)
+    
+    
+    def get_epoch_string(self, epoch):
+        
+        res = self.history[epoch]
+        
+        # Get epoch status
+        t = res["time"] if "time" in res else 0
+        train_acc = res["train_acc"] if "train_acc" in res else 0
+        train_loss = res["train_loss"] if "train_loss" in res else 0
+        train_count = res["train_count"] if "train_count" in res else 0
+        val_acc = res["val_acc"] if "val_acc" in res else 0
+        val_loss = res["val_loss"] if "val_loss" in res else 0
+        val_count = res["val_count"] if "val_count" in res else 0
+        res_lr = res["res_lr"] if "res_lr" in res else []
+        res_lr_str = str(res_lr)
+        
+        # Get result
+        f = "{:."+str(self.loss_precision)+"f}"
+        train_loss = f.format(train_loss)
+        val_loss = f.format(val_loss)
+        train_acc = round(train_acc / train_count * 10000) / 100
+        val_acc = round(val_acc / val_count * 10000) / 100
+        
+        msg = []
+        msg.append(f'\rEpoch: {epoch}')
+        
+        if self.acc_fn is not None:
+            acc_rel = "{:.4f}".format(train_acc / val_acc) if val_acc > 0 else 0
+            msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
+        
+        msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
+        msg.append(f'lr: {res_lr_str}, t: {t}s')
+        
+        return ", ".join(msg)
+        
+    
