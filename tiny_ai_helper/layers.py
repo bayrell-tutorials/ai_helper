@@ -254,7 +254,7 @@ class Stacking(torch.nn.Module):
                 )
 
 
-class Pipe():
+class Pipe(torch.nn.Module):
     def __init__(self, *args):
         torch.nn.Module.__init__(self)
         self.pipe = args

@@ -683,8 +683,7 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             total_count = len(train_dataset) + len(val_dataset)
             pos = 0
             
-            model.epoch = model.epoch + 1
-            epoch = model.epoch
+            epoch = model.epoch + 1
             
             # train mode
             model.train()
@@ -779,52 +778,31 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                         print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
             
-            if model.loss_reduction == "mean":
-                train_loss = (train_loss / train_iter).item()
-                val_loss = (val_loss / val_iter).item()
-            
-            elif model.loss_reduction == "sum":
-                train_loss = (train_loss / train_count).item()
-                val_loss = (val_loss / val_count).item()
-            
-            if scheduler is not None:
-               scheduler.step(val_loss)
-            
-            # Current lr
-            res_lr = []
-            for param_group in optimizer.param_groups:
-                res_lr.append( round(param_group['lr'], 7) )
-            
+            # Add metricks
             time_end = time.time()
             t = round(time_end - time_start)
             
-            train_acc_value = (train_acc / train_count) if train_count > 0 else 0
-            val_acc_value = (val_acc / val_count) if train_count > 0 else 0
+            model.add_epoch(
+                train_acc = train_acc,
+                train_batch_count = train_count,
+                train_batch_iter = train_iter,
+                train_loss = train_loss,
+                val_acc = val_acc,
+                val_batch_count = val_count,
+                val_batch_iter = val_iter,
+                val_loss = val_loss,
+                t = t,
+            )
             
-            h = {
-                "epoch": epoch,
-                "rel": (train_acc_value / val_acc_value) if val_acc_value > 0 else 0,
-                "res_lr": res_lr,
-                "time": t,
-                "train_acc": train_acc,
-                "train_acc_value": train_acc_value,
-                "train_count": train_count,
-                "train_loss": train_loss,
-                "val_acc": val_acc,
-                "val_acc_value": val_acc_value,
-                "val_count": val_count,
-                "val_loss": val_loss,
-            }
-            
-            model.history[epoch] = h
             print( model.get_epoch_string(epoch) )
             
+            model.epoch = epoch
             model.save_epoch()
             model.save_the_best_models()
             
             if res_lr[0] < min_lr:
                 break
-
+        
         print ("Ok")
 
     except KeyboardInterrupt:

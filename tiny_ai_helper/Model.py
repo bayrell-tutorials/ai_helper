@@ -97,8 +97,8 @@ class Model:
             except:
                 pass
         
-        if self.scheduler is None and self.optimizer is not None:
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
+        #if self.scheduler is None and self.optimizer is not None:
+        #    self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
         
         return self
     
@@ -228,9 +228,15 @@ class Model:
         save_metrics["epoch"] = self.epoch
         save_metrics["history"] = self.history.copy()
         save_metrics["module"] = self.module.state_dict()
-        save_metrics["optimizer"] = self.optimizer.state_dict()
-        save_metrics["scheduler"] = self.scheduler.state_dict()
-        save_metrics["loss"] = self.loss.state_dict()
+        
+        if self.optimizer is not None:
+            save_metrics["optimizer"] = self.optimizer.state_dict()
+        
+        if self.scheduler is not None:
+            save_metrics["scheduler"] = self.scheduler.state_dict()
+        
+        if self.loss is not None:
+            save_metrics["loss"] = self.loss.state_dict()
         
         # Create folder
         if not os.path.isdir(self.model_path):
@@ -276,6 +282,10 @@ class Model:
             return False
         
         return True
+    
+    
+    def __call__(self, x):
+        return self.module(x)
     
     
     def fit(self, train_dataset, val_dataset,
@@ -492,7 +502,7 @@ class Model:
             model_name=self.get_full_name()
         )
     
-    
+        
     def draw_history_ax(self, ax, metrics=[], label=None, legend=True, convert=None):
         
         """
@@ -544,6 +554,66 @@ class Model:
             print(s)
     
     
+    def add_epoch(self,
+        train_batch_iter=None, train_batch_count=None,
+        train_acc=None, train_loss=None,
+        val_batch_iter=None, val_batch_count=None,
+        val_acc=None, val_loss=None,
+        t=None, **kwargs
+    ):
+    
+        lr = []
+        for param_group in self.optimizer.param_groups:
+            lr.append( round(param_group['lr'], 7) )
+        
+        h = {
+            "epoch": self.epoch,
+            "train_batch_iter": train_batch_iter,
+            "train_batch_count": train_batch_count,
+            "train_acc_total": train_acc,
+            "train_loss_total": train_loss,
+            "val_batch_iter": val_batch_iter,
+            "val_batch_count": val_batch_count,
+            "val_acc_total": val_acc,
+            "val_loss_total": val_loss,
+            "train_loss": None,
+            "train_acc": None,
+            "val_loss": None,
+            "val_acc": None,
+            "rel": None,
+            "lr": lr,
+            "t": t,
+            **kwargs
+        }
+        
+        if self.loss_reduction == "mean":
+            
+            if train_batch_iter is not None:
+                h["train_loss"] = train_loss / train_batch_iter
+            
+            if val_batch_iter is not None:
+                h["val_loss"] = val_loss / val_batch_iter
+        
+        elif self.loss_reduction == "sum":
+            
+            if train_batch_count is not None:
+                h["train_loss"] = train_loss / train_batch_count
+            
+            if val_batch_count is not None:
+                h["val_loss"] = val_loss / val_batch_count
+        
+        if train_acc is not None:
+            h["train_acc"] = (train_acc / train_batch_count) if train_batch_count > 0 else 0
+        
+        if val_acc is not None:
+            h["val_acc"] = (val_acc / val_batch_count) if val_batch_count > 0 else 0
+        
+        if h["train_acc"] is not None and h["val_acc"] is not None:
+            h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
+        
+        self.history[self.epoch] = h
+    
+    
     def get_epoch_string(self, epoch):
         
         res = self.history[epoch]
@@ -556,21 +626,21 @@ class Model:
         val_acc = res["val_acc"] if "val_acc" in res else 0
         val_loss = res["val_loss"] if "val_loss" in res else 0
         val_count = res["val_count"] if "val_count" in res else 0
-        res_lr = res["res_lr"] if "res_lr" in res else []
+        res_lr = res["lr"] if "lr" in res else []
         res_lr_str = str(res_lr)
         
         # Get result
         f = "{:."+str(self.loss_precision)+"f}"
         train_loss = f.format(train_loss)
         val_loss = f.format(val_loss)
-        train_acc = round(train_acc / train_count * 10000) / 100
-        val_acc = round(val_acc / val_count * 10000) / 100
+        train_acc = round(train_acc * 10000) / 100
+        val_acc = round(val_acc * 10000) / 100
         
         msg = []
         msg.append(f'\rEpoch: {epoch}')
         
         if self.acc_fn is not None:
-            acc_rel = "{:.4f}".format(train_acc / val_acc) if val_acc > 0 else 0
+            acc_rel = res["rel"] if "rel" in res else 0
             msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
         
         msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
@@ -578,4 +648,39 @@ class Model:
         
         return ", ".join(msg)
         
+    
+    def get_train_loss(self, epoch=None):
+        if epoch is None:
+            epoch = self.epoch
+        value = self.history[epoch]["train_loss"]
+        if value is None:
+            value = 0
+        return value
+    
+    
+    def get_val_loss(self, epoch=None):
+        if epoch is None:
+            epoch = self.epoch
+        value = self.history[epoch]["train_loss"]
+        if value is None:
+            value = 0
+        return value
+    
+    
+    def get_train_acc(self, epoch=None):
+        if epoch is None:
+            epoch = self.epoch
+        value = self.history[epoch]["train_acc"]
+        if value is None:
+            value = 0
+        return value
+    
+    
+    def get_val_acc(self, epoch=None):
+        if epoch is None:
+            epoch = self.epoch
+        value = self.history[epoch]["train_acc"]
+        if value is None:
+            value = 0
+        return value
     
