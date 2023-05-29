@@ -310,7 +310,7 @@ def resize_image_canvas(image, size, color=None):
         pixels = image.load()
         color = pixels[0, 0]
         del pixels
-        
+    
     image_new = Image.new(image.mode, (width, height), color = color)
     
     position = (
@@ -345,7 +345,7 @@ def show_image_in_plot(image, cmap=None, is_float=False, first_channel=False):
     plt.show()
 
 
-def list_files(path="", recursive=True):
+def list_files(path="", recursive=True, full_path=False):
     
     """
         Returns files in folder
@@ -379,6 +379,9 @@ def list_files(path="", recursive=True):
     
     except Exception:
         items = []
+    
+    if full_path:
+        items = list( map(lambda x: os.path.join(path, x), items) )
     
     return items
 
@@ -627,7 +630,8 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
         if model_name is not None and model_name != module.__class__.__name__:
             print( f"Model name: {model_name}" )
         print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
-        print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
+        if res['params_count'] != res['params_train_count']:
+            print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
         #print( f"Total size: {res['total_size']} MiB" )
         print( "=" * width )
 

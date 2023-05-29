@@ -410,6 +410,26 @@ class Model:
         return res
     
     
+    def get_metric(self, metric_name, convert=False):
+        
+        """
+        Returns metrics by name
+        """
+        
+        res = []
+        epochs = list(self.history.keys())
+        for index in epochs:
+            
+            epoch = self.history[index]
+                        
+            value = epoch[metric_name] if metric_name in epoch else 0
+            if convert:
+                value = convert_value(value, metric_name)
+            res.append( value )
+            
+        return res
+    
+    
     def get_the_best_epoch(self):
         
         """
