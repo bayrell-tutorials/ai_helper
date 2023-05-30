@@ -704,3 +704,11 @@ class Model:
             value = 0
         return value
     
+    
+    def get_epoch_metric(self, metric_name, epoch=None):
+        if epoch is None:
+            epoch = self.epoch
+        value = self.history[epoch][metric_name]
+        if value is None:
+            value = 0
+        return value
