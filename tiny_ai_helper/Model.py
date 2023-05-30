@@ -126,6 +126,16 @@ class Model:
         return self
     
     
+    def load_weights(self, file_path):
+        
+        """
+        Load weights
+        """
+        
+        state_dict = torch.load(file_path)
+        self.module.load_state_dict(state_dict, strict=False)
+        
+        
     def load_file(self, file_path):
         
         """
@@ -214,9 +224,26 @@ class Model:
         if obj is not None:
             best_epoch = obj["best_epoch"]
             self.load_epoch(best_epoch)
-        
     
-    def save_epoch(self):
+    
+    def save_weights(self, file_path=None):
+        
+        """
+        Save weights
+        """
+        
+        if file_path is None:
+            model_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
+            file_path = os.path.join(
+                self.model_path,
+                model_name
+            )
+        
+        state_dict = torch.load(file_path)
+        self.module.load_state_dict(state_dict, strict=False)
+    
+    
+    def save_model(self):
         
         """
         Save train status
@@ -286,13 +313,6 @@ class Model:
     
     def __call__(self, x):
         return self.module(x)
-    
-    
-    def fit(self, train_dataset, val_dataset,
-        batch_size=32, epochs=10
-    ):
-        fit(self, train_dataset, val_dataset,
-            batch_size=batch_size, epochs=epochs)
     
     
     def predict(self, x):
@@ -712,3 +732,4 @@ class Model:
         if value is None:
             value = 0
         return value
+    

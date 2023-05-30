@@ -801,7 +801,7 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             print( model.get_epoch_string(epoch) )
             
             model.epoch = epoch
-            model.save_epoch()
+            model.save_model()
             model.save_the_best_models()
             
             if res_lr[0] < min_lr:
@@ -817,4 +817,86 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def colab_upload_file_to_google_drive(src, dest):
     
+    import shutil
+    
+    if not os.path.exists('/content/drive'):
+        from google.colab import drive
+        drive.mount('/content/drive')
+    
+    dest_dir_path = os.path.dirname(dest)
+    if not os.path.exists(dest_dir_path):
+        os.makedirs(dest_dir_path)
+    
+    shutil.copy(src, dest)
+    
+
+def colab_upload_model_to_google_drive(model, path, epoch):
+    
+    import shutil
+    
+    if not os.path.exists('/content/drive'):
+        from google.colab import drive
+        drive.mount('/content/drive')
+    
+    if not os.path.exists(generator_path):
+        os.makedirs(generator_path)
+    
+    src_file_path = os.path.join(model.model_path, "model-" + str(epoch) + ".data")
+    dest_file_path = os.path.join(path, "model-" + str(epoch) + ".data")
+    
+    shutil.copy(src_file_path, dest_file_path)
+
+
+def colab_upload_history_to_google_drive(model, path):
+    
+    import shutil
+    
+    if not os.path.exists('/content/drive'):
+        from google.colab import drive
+        drive.mount('/content/drive')
+    
+    if not os.path.exists(generator_path):
+        os.makedirs(generator_path)
+    
+    src_file_path = os.path.join(model.model_path, "history.json")
+    dest_file_path = os.path.join(path, "history.json")
+    
+    shutil.copy(src_file_path, dest_file_path)
+
+
+def colab_download_model_from_google_drive(model, path, epoch):
+    
+    import shutil
+    
+    if not os.path.exists('/content/drive'):
+        from google.colab import drive
+        drive.mount('/content/drive')
+    
+    if not os.path.exists(model.model_path):
+        os.makedirs(model.model_path)
+    
+    src_file_path = os.path.join(path, "model-" + str(epoch) + ".data")
+    dest_file_path = os.path.join(model.model_path, "model-" + str(epoch) + ".data")
+    
+    shutil.copy(src_file_path, dest_file_path)
+
+
+def colab_download_history_from_google_drive(model, path):
+    
+    import shutil
+    
+    if not os.path.exists('/content/drive'):
+        from google.colab import drive
+        drive.mount('/content/drive')
+    
+    if not os.path.exists(model.model_path):
+        os.makedirs(model.model_path)
+    
+    src_file_path = os.path.join(path, "history.json")
+    dest_file_path = os.path.join(model.model_path, "history.json")
+    
+    shutil.copy(src_file_path, dest_file_path)
