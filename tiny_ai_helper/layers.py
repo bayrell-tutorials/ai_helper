@@ -176,7 +176,7 @@ class NormalizeImage(torch.nn.Module):
 
 class PreparedModule(torch.nn.Module):
     
-    def __init__(self, module, weight_path=None, forward=None, *args, **kwargs):
+    def __init__(self, module, weight_path=None, forward=None, requires_grad=False, *args, **kwargs):
         
         torch.nn.Module.__init__(self)
         
@@ -184,8 +184,9 @@ class PreparedModule(torch.nn.Module):
         self.weight_path = weight_path
         self._forward = forward
         
-        for param in self.module.parameters():
-            param.requires_grad = False
+        if not requires_grad:
+            for param in self.module.parameters():
+                param.requires_grad = False
         
         self.load_weight()
     
@@ -267,9 +268,9 @@ class Pipe(torch.nn.Module):
 
 class ModuleRemoveLastClassifier(PreparedModule):
     
-    def __init__(self, module, weight_path=None, *args, **kwargs):
+    def __init__(self, module, weight_path=None, requires_grad=False, *args, **kwargs):
         
-        PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
+        PreparedModule.__init__(self, module, weight_path, requires_grad, *args, **kwargs)
         
         # Remove last layer
         classifier = list(self.module.classifier.children())
@@ -279,8 +280,8 @@ class ModuleRemoveLastClassifier(PreparedModule):
 
 class ModuleRemoveAllClassifier(PreparedModule):
     
-    def __init__(self, module, weight_path=None, *args, **kwargs):
-        PreparedModule.__init__(self, module, weight_path, *args, **kwargs)
+    def __init__(self, module, weight_path=None, requires_grad=False, *args, **kwargs):
+        PreparedModule.__init__(self, module, weight_path, requires_grad, *args, **kwargs)
     
     def forward(self, x):
         x = self.module.features(x)

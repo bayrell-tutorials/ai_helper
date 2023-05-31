@@ -143,31 +143,37 @@ class Model:
         """
         
         save_metrics = torch.load(file_path)
-        self.epoch = save_metrics["epoch"]
         
-        # Load history
-        if "history" in save_metrics:
-            self.history = save_metrics["history"].copy()
+        if "epoch" in save_metrics:
+            
+            self.epoch = save_metrics["epoch"]
+            
+            # Load history
+            if "history" in save_metrics:
+                self.history = save_metrics["history"].copy()
+            
+            # Load module
+            if "module" in save_metrics:
+                state_dict = save_metrics["module"]
+                self.module.load_state_dict(state_dict, strict=False)
+            
+            # Load optimizer
+            if "optimizer" in save_metrics:
+                state_dict = save_metrics["optimizer"]
+                self.optimizer.load_state_dict(state_dict)
+            
+            # Load scheduler
+            if "scheduler" in save_metrics:
+                state_dict = save_metrics["scheduler"]
+                self.scheduler.load_state_dict(state_dict)
+            
+            # Load loss
+            if "loss" in save_metrics:
+                state_dict = save_metrics["loss"]
+                self.loss.load_state_dict(state_dict)
         
-        # Load module
-        if "module" in save_metrics:
-            state_dict = save_metrics["module"]
-            self.module.load_state_dict(state_dict, strict=False)
-        
-        # Load optimizer
-        if "optimizer" in save_metrics:
-            state_dict = save_metrics["optimizer"]
-            self.optimizer.load_state_dict(state_dict)
-        
-        # Load scheduler
-        if "scheduler" in save_metrics:
-            state_dict = save_metrics["scheduler"]
-            self.scheduler.load_state_dict(state_dict)
-        
-        # Load loss
-        if "loss" in save_metrics:
-            state_dict = save_metrics["loss"]
-            self.loss.load_state_dict(state_dict)
+        else:
+            self.module.load_state_dict(save_metrics, strict=False)
         
     
     def load(self, file_name):
@@ -239,8 +245,7 @@ class Model:
                 model_name
             )
         
-        state_dict = torch.load(file_path)
-        self.module.load_state_dict(state_dict, strict=False)
+        torch.save(self.module.state_dict(), file_path)
     
     
     def save_model(self):
