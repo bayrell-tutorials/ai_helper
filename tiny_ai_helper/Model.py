@@ -15,7 +15,7 @@ from .utils import TransformDataset, list_files, \
 class Model:
     
     def __init__(self, module=None):
-        self.device = None
+        self.device = 'cpu'
         self.transform_x = None
         self.transform_y = None
         self.module = module
@@ -24,7 +24,7 @@ class Model:
         self.loss = None
         self.loss_reduction = 'mean'
         self.loss_precision = 9
-        self.best_metrics = ["val_acc_value", "rel", "epoch"]
+        self.best_metrics = ["epoch"]
         self.acc_fn = None
         self.name = module.__class__.__name__
         self.prefix_name = ""
@@ -82,27 +82,6 @@ class Model:
         return self.name
     
     
-    def init(self):
-        
-        """
-        Init model
-        """
-        
-        if self.loss is None:
-            self.loss = torch.nn.MSELoss()
-        
-        if self.optimizer is None:
-            try:
-                self.optimizer = torch.optim.Adam(self.module.parameters(), lr=1e-3)
-            except:
-                pass
-        
-        #if self.scheduler is None and self.optimizer is not None:
-        #    self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer )
-        
-        return self
-    
-    
     def to(self, device):
         self.module = self.module.to(device)
         self.device = device
@@ -111,7 +90,6 @@ class Model:
     def to_cuda(self):
         self.to( torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu') )
         return self
-    
     
     def to_cpu(self):
         self.to( torch.device("cpu") )
@@ -192,7 +170,8 @@ class Model:
         Load current epoch
         """
         
-        file_path = os.path.join(self.model_path, "model-" + str(epoch) + ".data")
+        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        file_path = os.path.join(self.model_path, model_file_name)
         self.load_file(file_path)
         
         
@@ -239,10 +218,10 @@ class Model:
         """
         
         if file_path is None:
-            model_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
+            model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
             file_path = os.path.join(
                 self.model_path,
-                model_name
+                model_file_name
             )
         
         torch.save(self.module.state_dict(), file_path)
@@ -275,7 +254,8 @@ class Model:
             os.makedirs(self.model_path)
         
         # Save model to file
-        file_name = os.path.join(self.model_path, "model-" + str(self.epoch) + ".data")
+        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        file_name = os.path.join(self.model_path, model_file_name)
         torch.save(save_metrics, file_name)
         
         # Save history to json
@@ -536,25 +516,26 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, x, y=None):
+    def summary(self, x):
         
         """
         Show model summary
         """
         
-        summary(self.module, x, y,
+        summary(self.module, x,
             device=self.device,
             model_name=self.get_full_name()
         )
     
         
-    def draw_history_ax(self, ax, metrics=[], label=None, legend=True, convert=None):
+    def draw_history_ax(self, ax, metrics=[], label=None, legend=True, convert=None, start=0):
         
         """
         Draw history to axes
         """
         
         metrics_values = self.get_metrics(metrics)
+        metrics_values = metrics_values[start:]
         for index, name in enumerate(metrics):
             values = [ item[index + 1] for item in metrics_values ]
             if convert:
@@ -664,7 +645,7 @@ class Model:
         res = self.history[epoch]
         
         # Get epoch status
-        t = res["time"] if "time" in res else 0
+        t = res["t"] if "t" in res else 0
         train_acc = res["train_acc"] if "train_acc" in res else 0
         train_loss = res["train_loss"] if "train_loss" in res else 0
         train_count = res["train_count"] if "train_count" in res else 0
@@ -678,13 +659,13 @@ class Model:
         f = "{:."+str(self.loss_precision)+"f}"
         train_loss = f.format(train_loss)
         val_loss = f.format(val_loss)
-        train_acc = round(train_acc * 10000) / 100
-        val_acc = round(val_acc * 10000) / 100
         
         msg = []
         msg.append(f'\rEpoch: {epoch}')
         
         if self.acc_fn is not None:
+            train_acc = round(train_acc * 10000) / 100
+            val_acc = round(val_acc * 10000) / 100
             acc_rel = res["rel"] if "rel" in res else 0
             msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
         

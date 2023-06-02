@@ -446,7 +446,7 @@ def save_json(file_name, obj, indent=2):
     Save json to file
     """
     
-    json_str = json.dumps(obj, indent=indent, cls=JSONEncoder)
+    json_str = json.dumps(obj, indent=indent, cls=JSONEncoder, ensure_ascii=False)
     file = open(file_name, "w")
     file.write(json_str)
     file.close()
@@ -478,7 +478,7 @@ def load_json(file_name):
     return obj
 
 
-def summary(module, x, y=None, model_name=None, batch_transform=None, device=None):
+def summary(module, x, model_name=None, batch_transform=None, device=None):
         
         """
         Show model summary
@@ -544,14 +544,15 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
             )
             it = loader._get_iterator()
             
-            x, y = next(it)
+            batch = next(it)
+            x = batch["x"]
         
         if batch_transform is None:
             batch_transform = getattr(module, "batch_transform", None)
         
         # Trasform
         if batch_transform is not None:
-            x, _ = batch_transform(x, y)
+            x, _ = batch_transform(x, None)
         
         # Move to device
         if device is not None:
@@ -627,8 +628,8 @@ def summary(module, x, y=None, model_name=None, batch_transform=None, device=Non
             print( format_row(value, info_sizes) )
         
         print( "-" * width )
-        if model_name is not None and model_name != module.__class__.__name__:
-            print( f"Model name: {model_name}" )
+        #if model_name is not None and model_name != module.__class__.__name__:
+        print( f"Model name: {model_name}" )
         print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
         if res['params_count'] != res['params_train_count'] and res['params_train_count'] > 0:
             print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
@@ -677,11 +678,11 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             
             time_start = time.time()
             train_count = 0
-            train_loss = 0
+            train_loss = []
             train_iter = 0
             train_acc = 0
             val_count = 0
-            val_loss = 0
+            val_loss = []
             val_iter = 0
             val_acc = 0
             total_count = len(train_dataset) + len(val_dataset)
@@ -692,11 +693,11 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             # train mode
             model.train()
             
-            for x_batch, y_batch in train_loader:
+            for batch in train_loader:
                 
                 # data to device
-                x_batch = x_batch.to(device)
-                y_batch = y_batch.to(device)
+                x_batch = batch["x"].to(device)
+                y_batch = batch["y"].to(device)
                 if batch_transform:
                     x_batch, y_batch = batch_transform(x_batch, y_batch)
                 
@@ -713,10 +714,9 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                 batch_len = len(x_batch[0]) \
                     if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
                     else len(x_batch)
-                train_loss += loss
+                
+                train_loss.append( loss.item() )
                 train_count += batch_len
-                train_iter += 1
-                pos += batch_len
                 
                 train_acc_val = 0
 
@@ -730,6 +730,7 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
+                pos += batch_len
                 iter_value = round(pos / total_count * 100)
                 if train_acc_val > 0:
                     print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(train_acc_val), end="")
@@ -742,11 +743,11 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                 # testing mode
                 model.eval()
                 
-                for x_batch, y_batch in val_loader:
+                for batch in val_loader:
                     
                     # data to device
-                    x_batch = x_batch.to(device)
-                    y_batch = y_batch.to(device)
+                    x_batch = batch["x"].to(device)
+                    y_batch = batch["y"].to(device)
                     if batch_transform:
                         x_batch, y_batch = batch_transform(x_batch, y_batch)
                     
@@ -758,10 +759,10 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                     batch_len = len(x_batch[0]) \
                         if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
                         else len(x_batch)
-                    val_loss += loss
+                    
+                    val_loss.append( loss.item() )
                     val_count += batch_len
                     val_iter += 1
-                    pos += batch_len
                     
                     val_acc_val = 0
                     
@@ -775,6 +776,7 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
+                    pos += batch_len
                     iter_value = round(pos / total_count * 100)
                     if val_acc_val > 0:
                         print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(val_acc_val), end="")
@@ -786,21 +788,21 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             time_end = time.time()
             t = round(time_end - time_start)
             
+            model.epoch = epoch
             model.add_epoch(
                 train_acc = train_acc,
                 train_batch_count = train_count,
-                train_batch_iter = train_iter,
-                train_loss = train_loss,
+                train_batch_iter = len(train_loss),
+                train_loss = sum(train_loss),
                 val_acc = val_acc,
                 val_batch_count = val_count,
-                val_batch_iter = val_iter,
-                val_loss = val_loss,
+                val_batch_iter = len(val_loss),
+                val_loss = sum(val_loss),
                 t = t,
             )
             
             print( model.get_epoch_string(epoch) )
             
-            model.epoch = epoch
             model.save_model()
             model.save_the_best_models()
             
