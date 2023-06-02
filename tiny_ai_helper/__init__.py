@@ -9,7 +9,7 @@
 from .Model import Model
 from .utils import compile, fit
 
-__version__ = "0.1.9"
+__version__ = "0.1.10"
 
 __all__ = (
     "Model",
