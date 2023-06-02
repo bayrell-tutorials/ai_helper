@@ -167,11 +167,16 @@ class Model:
     def load_epoch(self, epoch):
         
         """
-        Load current epoch
+        Load epoch
         """
         
-        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        model_file_name = self.get_full_name() + "-" + str(epoch) + ".data"
         file_path = os.path.join(self.model_path, model_file_name)
+        
+        if not os.path.exists(file_path):
+            model_file_name = self.get_full_name() + "-" + str(epoch) + ".pth"
+            file_path = os.path.join(self.model_path, model_file_name)
+        
         self.load_file(file_path)
         
         
@@ -596,12 +601,12 @@ class Model:
             "epoch": self.epoch,
             "train_batch_iter": train_batch_iter,
             "train_batch_count": train_batch_count,
-            "train_acc_total": train_acc,
-            "train_loss_total": train_loss,
+            "train_acc_sum": train_acc,
+            "train_loss_sum": train_loss,
             "val_batch_iter": val_batch_iter,
             "val_batch_count": val_batch_count,
-            "val_acc_total": val_acc,
-            "val_loss_total": val_loss,
+            "val_acc_sum": val_acc,
+            "val_loss_sum": val_loss,
             "train_loss": None,
             "train_acc": None,
             "val_loss": None,
