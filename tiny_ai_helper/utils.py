@@ -803,8 +803,10 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             
             print( model.get_epoch_string(epoch) )
             
-            model.save_model()
+            model.save_last_model()
+            model.save_weights()
             model.save_the_best_models()
+            model.save_history()
             
             if res_lr[0] < min_lr:
                 break

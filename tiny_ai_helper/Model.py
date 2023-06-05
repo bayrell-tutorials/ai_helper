@@ -189,13 +189,24 @@ class Model:
         file_name = os.path.join(self.model_path, "history.json")
         
         if not os.path.exists(file_name):
-            return
         
-        obj = load_json(file_name)
+            obj = load_json(file_name)
+            
+            if obj is not None:
+                epoch = obj["epoch"]
+                self.load_epoch(epoch)
         
-        if obj is not None:
-            epoch = obj["epoch"]
-            self.load_epoch(epoch)
+        else:
+            
+            model_file_name = self.get_full_name() + ".data"
+            file_path = os.path.join(self.model_path, model_file_name)
+            
+            if not os.path.exists(file_path):
+                model_file_name = self.get_full_name() + ".pth"
+                file_path = os.path.join(self.model_path, model_file_name)
+            
+            if os.path.exists(file_path):
+                self.load_file(file_path)
         
     
     def load_best(self):
@@ -232,7 +243,18 @@ class Model:
         torch.save(self.module.state_dict(), file_path)
     
     
-    def save_model(self):
+    def save_last_model(self):
+        
+        """
+        Save last model
+        """
+        
+        model_file_name = self.get_full_name() + ".data"
+        file_path = os.path.join(self.model_path, model_file_name)
+        self.save_model(file_path)
+        
+        
+    def save_model(self, file_path=None):
         
         """
         Save train status
@@ -259,12 +281,10 @@ class Model:
             os.makedirs(self.model_path)
         
         # Save model to file
-        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
-        file_name = os.path.join(self.model_path, model_file_name)
-        torch.save(save_metrics, file_name)
-        
-        # Save history to json
-        self.save_history()
+        if file_path is None:
+            model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+            file_path = os.path.join(self.model_path, model_file_name)
+        torch.save(save_metrics, file_path)
     
     
     def save_history(self):
@@ -481,6 +501,24 @@ class Model:
         return res
     
     
+    def get_best_epoch(self):
+        
+        """
+        Returns the best epoch
+        """
+        
+        return self.get_the_best_epoch()
+    
+    
+    def get_best_epochs(self, epoch_count=5):
+        
+        """
+        Returns best epoch indexes
+        """
+        
+        return self.get_the_best_epochs_indexes(epoch_count)
+    
+    
     def save_the_best_models(self):
         
         """
@@ -495,6 +533,10 @@ class Model:
             epoch_index = 0
             
             result = re.match(r'^model-(?P<id>[0-9]+)\.data$', file_name)
+            if result:
+                return "model", int(result.group("id"))
+            
+            result = re.match(r'^model-(?P<id>[0-9]+)\.pth$', file_name)
             if result:
                 return "model", int(result.group("id"))
             
