@@ -642,7 +642,12 @@ def compile(module):
     return Model(module)
 
 
-def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
+def fit(
+    model, train_dataset, val_dataset,
+    batch_size=64, epochs=10,
+    save_model=True, on_end_epoch=None,
+    one_line=False
+):
     
     device = model.device
     
@@ -655,12 +660,15 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
         drop_last=False,
         shuffle=True
     )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        drop_last=False,
-        shuffle=False
-    )
+    
+    val_loader = None
+    if val_dataset:
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            drop_last=False,
+            shuffle=False
+        )
     
     acc_fn = model.acc_fn
     device = model.device
@@ -672,7 +680,7 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
     
     batch_transform = getattr(module, "batch_transform", None)
     
-    print ("Start train on " + device)
+    print ("Start train on " + str(device))
     try:
         while model.do_training(epochs):
             
@@ -685,7 +693,11 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             val_loss = []
             val_iter = 0
             val_acc = 0
-            total_count = len(train_dataset) + len(val_dataset)
+            
+            total_count = len(train_dataset)
+            if val_dataset is not None:
+                total_count += len(val_dataset)
+            
             pos = 0
             
             epoch = model.epoch + 1
@@ -696,10 +708,11 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
             for batch in train_loader:
                 
                 # data to device
+                if batch_transform:
+                    batch = batch_transform(batch)
+                
                 x_batch = batch["x"].to(device)
                 y_batch = batch["y"].to(device)
-                if batch_transform:
-                    x_batch, y_batch = batch_transform(x_batch, y_batch)
                 
                 # set parameter gradients to zero
                 optimizer.zero_grad()
@@ -738,50 +751,52 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                     print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
             
-            with torch.no_grad():
+            if val_loader:
+                with torch.no_grad():
 
-                # testing mode
-                model.eval()
-                
-                for batch in val_loader:
+                    # testing mode
+                    model.eval()
                     
-                    # data to device
-                    x_batch = batch["x"].to(device)
-                    y_batch = batch["y"].to(device)
-                    if batch_transform:
-                        x_batch, y_batch = batch_transform(x_batch, y_batch)
-                    
-                    # forward
-                    y_pred = module(x_batch)
-                    loss = loss_fn(y_pred, y_batch)
-                    
-                    # add metrics
-                    batch_len = len(x_batch[0]) \
-                        if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
-                        else len(x_batch)
-                    
-                    val_loss.append( loss.item() )
-                    val_count += batch_len
-                    val_iter += 1
-                    
-                    val_acc_val = 0
-                    
-                    # Calc accuracy
-                    if acc_fn is not None:
-                        val_acc += acc_fn(y_pred, y_batch)
-                        val_acc_val = round(val_acc / val_count * 10000) / 100
-                    
-                    del x_batch, y_batch, y_pred, loss
+                    for batch in val_loader:
+                        
+                        # data to device
+                        if batch_transform:
+                            batch = batch_transform(batch)
+                        
+                        x_batch = batch["x"].to(device)
+                        y_batch = batch["y"].to(device)
+                        
+                        # forward
+                        y_pred = module(x_batch)
+                        loss = loss_fn(y_pred, y_batch)
+                        
+                        # add metrics
+                        batch_len = len(x_batch[0]) \
+                            if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
+                            else len(x_batch)
+                        
+                        val_loss.append( loss.item() )
+                        val_count += batch_len
+                        val_iter += 1
+                        
+                        val_acc_val = 0
+                        
+                        # Calc accuracy
+                        if acc_fn is not None:
+                            val_acc += acc_fn(y_pred, y_batch)
+                            val_acc_val = round(val_acc / val_count * 10000) / 100
+                        
+                        del x_batch, y_batch, y_pred, loss
 
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    
-                    pos += batch_len
-                    iter_value = round(pos / total_count * 100)
-                    if val_acc_val > 0:
-                        print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(val_acc_val), end="")
-                    else:
-                        print(f"\rEpoch: {epoch}, {iter_value}%", end="")
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        
+                        pos += batch_len
+                        iter_value = round(pos / total_count * 100)
+                        if val_acc_val > 0:
+                            print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(val_acc_val), end="")
+                        else:
+                            print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
             
             # Add metricks
@@ -801,15 +816,24 @@ def fit(model, train_dataset, val_dataset, batch_size=64, epochs=10):
                 t = t,
             )
             
-            print( model.get_epoch_string(epoch) )
+            if one_line:
+                print( "\r" + model.get_epoch_string(epoch), end="" )
+            else:
+                print( model.get_epoch_string(epoch) )
             
-            model.save_last_model()
-            model.save_weights()
-            model.save_the_best_models()
-            model.save_history()
+            if save_model:
+                model.save_last_model()
+                model.save_weights()
+                model.save_the_best_models()
+                model.save_history()
             
-            if res_lr[0] < min_lr:
-                break
+            if on_end_epoch is not None:
+                flag = on_end_epoch(model)
+                if flag == True:
+                    break
+        
+        if one_line:
+            print ("")
         
         print ("Ok")
 

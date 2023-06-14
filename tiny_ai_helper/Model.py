@@ -351,6 +351,7 @@ class Model:
         Predict dataset
         """
         
+        device = self.device
         loader = DataLoader(
             dataset,
             batch_size=batch_size,
@@ -369,25 +370,25 @@ class Model:
             dataset_count = len(dataset)
             time_start = time.time()
             
-            for batch_x, batch_y in loader:
-                
-                x_batch = x_batch.to(self.device)
-                y_batch = y_batch.to(self.device)
+            for batch in loader:
                 
                 if batch_transform:
-                    x_batch, y_batch = batch_transform(x_batch, y_batch)
+                    batch = batch_transform(batch)
                 
-                batch_predict = self.module(batch_x)
-                predict(batch_x, batch_y, batch_predict, obj)
+                x_batch = batch["x"].to(device)
+                y_batch = batch["y"].to(device)
+                
+                y_predict = self.module(x_batch)
+                predict(batch, y_predict, obj)
                 
                 # Show progress
-                pos = pos + len(batch_x)
+                pos = pos + len(x_batch)
                 if pos > next_pos:
                     next_pos = pos + 16
                     t = str(round(time.time() - time_start))
                     print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
                 
-                del batch_x, batch_y, batch_predict
+                del x_batch, y_batch, y_predict, batch
                 
                 # Clear cache
                 if torch.cuda.is_available():
@@ -661,25 +662,25 @@ class Model:
         
         if self.loss_reduction == "mean":
             
-            if train_batch_iter is not None:
+            if train_batch_iter is not None and train_batch_iter > 0:
                 h["train_loss"] = train_loss / train_batch_iter
             
-            if val_batch_iter is not None:
+            if val_batch_iter is not None and val_batch_iter > 0:
                 h["val_loss"] = val_loss / val_batch_iter
         
         elif self.loss_reduction == "sum":
             
-            if train_batch_count is not None:
+            if train_batch_count is not None and train_batch_count > 0:
                 h["train_loss"] = train_loss / train_batch_count
             
-            if val_batch_count is not None:
+            if val_batch_count is not None and val_batch_count > 0:
                 h["val_loss"] = val_loss / val_batch_count
         
-        if train_acc is not None:
-            h["train_acc"] = (train_acc / train_batch_count) if train_batch_count > 0 else 0
+        if train_acc is not None and train_batch_count > 0:
+            h["train_acc"] = train_acc / train_batch_count
         
-        if val_acc is not None:
-            h["val_acc"] = (val_acc / val_batch_count) if val_batch_count > 0 else 0
+        if val_acc is not None and val_batch_count > 0:
+            h["val_acc"] = val_acc / val_batch_count
         
         if h["train_acc"] is not None and h["val_acc"] is not None:
             h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
@@ -705,18 +706,27 @@ class Model:
         # Get result
         f = "{:."+str(self.loss_precision)+"f}"
         train_loss = f.format(train_loss)
-        val_loss = f.format(val_loss)
         
         msg = []
         msg.append(f'\rEpoch: {epoch}')
         
         if self.acc_fn is not None:
             train_acc = round(train_acc * 10000) / 100
-            val_acc = round(val_acc * 10000) / 100
-            acc_rel = res["rel"] if "rel" in res else 0
-            msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
+            
+            if val_count == 0:
+                msg.append(f'train_acc: {train_acc}%')
+            else:
+                val_acc = round(val_acc * 10000) / 100
+                acc_rel = res["rel"] if "rel" in res else 0
+                acc_rel = round(acc_rel * 1000) / 1000
+                msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
         
-        msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
+        if val_count == 0:
+            msg.append(f'train_loss: {train_loss}')
+        else:
+            val_loss = f.format(val_loss)
+            msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
+        
         msg.append(f'lr: {res_lr_str}, t: {t}s')
         
         return ", ".join(msg)
