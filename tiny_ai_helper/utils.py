@@ -273,6 +273,12 @@ def resize_image(image, new_size, contain=True, color=None):
     Resize image
     """
     
+    if isinstance(image, str):
+        image = Image.open(file_name)
+    
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)
+    
     w1 = image.size[0]
     h1 = image.size[1]
     w2 = new_size[0]
@@ -292,7 +298,7 @@ def resize_image(image, new_size, contain=True, color=None):
         w_new = round(h2 * w1 / h1)
     
     image_new = image.resize( (w_new, h_new) )
-    image_resize = resize_image_canvas(image_new, new_size)
+    image_resize = resize_image_canvas(image_new, new_size, color=color)
     del image_new
     
     return image_resize
@@ -322,7 +328,73 @@ def resize_image_canvas(image, size, color=None):
     return image_new
 
 
-def show_image_in_plot(image, cmap=None, is_float=False, first_channel=False):
+def load_image(file_name, convert=None, load_as="numpy"):
+    
+    image = Image.open(file_name)
+    
+    if convert:
+        image = image.convert(convert)
+    
+    if load_as == "numpy":
+        image = np.array(image)
+    
+    elif load_as == "torch":
+        image = np.array(image)
+        image = torch.from_numpy(image)
+    
+    return image
+
+
+def draw_images(images, ncols=4, cmap=None, first_channel=False):
+
+    import matplotlib.pyplot as plt
+    
+    count_images = len(images)
+    
+    fig, ax = plt.subplots(
+        (count_images - 1) // ncols + 1, ncols,
+        figsize=(10, 6), sharey=True, sharex=True
+    )
+    fig.subplots_adjust(0, 0, 1, 1)
+    ax = ax.flatten()
+
+    # Рисуем картинки
+    for i in range(count_images):
+        image = images[i]
+        
+        if isinstance(image, str):
+            image = load_image(image)
+            image = torch.from_numpy( image )
+        
+        elif isinstance(image, np.ndarray):
+            pass
+        
+        elif isinstance(image, torch.Tensor):
+            if first_channel:
+                image = image.permute(2, 1, 0)
+        
+        ax[i].imshow(image, cmap)
+
+    # Скрываем лишние картинки
+    for i in range(count_images, len(ax)):
+        ax[i].set_visible(False)
+    
+    plt.show()
+
+
+def draw_images_grid(images, ncols=4, first_channel=False):
+    
+    import matplotlib.pyplot as plt
+    from torchvision.utils import make_grid
+    
+    if not first_channel:
+        images = [ image.permute(2, 1, 0) for image in images ]
+    
+    plt.imshow(np.transpose(make_grid(images, nrow=math.ceil((len(images) - 1) / ncols))))
+    plt.show()
+
+
+def draw_image(image, cmap=None, first_channel=False):
     
     """
     Plot show image
@@ -331,13 +403,12 @@ def show_image_in_plot(image, cmap=None, is_float=False, first_channel=False):
     if isinstance(image, str):
         image = Image.open(image)
     
-    if torch.is_tensor(image):
+    elif isinstance(image, np.ndarray):
+        pass
+    
+    elif torch.is_tensor(image):
         if first_channel == True:
             image = torch.moveaxis(image, 0, 2)
-        
-        if is_float:
-            image = image * 255
-            image = image.to(torch.uint8)
     
     import matplotlib.pyplot as plt
     
@@ -526,7 +597,7 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
             
             # Add output size
             params, size = tensor_size(output)
-            res["total_size"] += size
+            #res["total_size"] += size
             
             # Add layer
             layers.append(layer)
@@ -564,7 +635,7 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
             for i in range(len(x)):
                 params, size = tensor_size(x[i])
                 shapes.append(x[i].shape)
-            res["total_size"] += size
+            #res["total_size"] += size
             layers.append({
                 "name": "Input",
                 "shape": shapes,
@@ -572,7 +643,7 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
             })
         else:
             params, size = tensor_size(x)
-            res["total_size"] += size
+            #res["total_size"] += size
             layers.append({
                 "name": "Input",
                 "shape": x.shape,
@@ -628,12 +699,12 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
             print( format_row(value, info_sizes) )
         
         print( "-" * width )
-        #if model_name is not None and model_name != module.__class__.__name__:
-        print( f"Model name: {model_name}" )
+        if model_name is not None:
+            print( f"Model name: {model_name}" )
         print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
         if res['params_count'] != res['params_train_count'] and res['params_train_count'] > 0:
             print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
-        #print( f"Total size: {res['total_size']} MiB" )
+        print( f"Total size: {res['total_size']} MiB" )
         print( "=" * width )
 
 
@@ -751,7 +822,7 @@ def fit(
                     print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
             
-            if val_loader:
+            if val_loader is not None:
                 with torch.no_grad():
 
                     # testing mode
@@ -806,11 +877,11 @@ def fit(
             model.epoch = epoch
             model.add_epoch(
                 train_acc = train_acc,
-                train_batch_count = train_count,
+                train_count = train_count,
                 train_batch_iter = len(train_loss),
                 train_loss = sum(train_loss),
                 val_acc = val_acc,
-                val_batch_count = val_count,
+                val_count = val_count,
                 val_batch_iter = len(val_loss),
                 val_loss = sum(val_loss),
                 t = t,

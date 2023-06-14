@@ -7,6 +7,7 @@
 ##
 
 import torch, time, json, math, gc, os
+import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, load_json, summary, fit
@@ -186,27 +187,25 @@ class Model:
         Load last model
         """
         
-        file_name = os.path.join(self.model_path, "history.json")
+        model_file_name = self.get_full_name() + ".data"
+        file_path = os.path.join(self.model_path, model_file_name)
         
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_path):
+            model_file_name = self.get_full_name() + ".pth"
+            file_path = os.path.join(self.model_path, model_file_name)
+        
+        if os.path.exists(file_path):
+            self.load_file(file_path)
+            return
+        
+        file_name = os.path.join(self.model_path, "history.json")
+        if os.path.exists(file_name):
         
             obj = load_json(file_name)
             
             if obj is not None:
                 epoch = obj["epoch"]
                 self.load_epoch(epoch)
-        
-        else:
-            
-            model_file_name = self.get_full_name() + ".data"
-            file_path = os.path.join(self.model_path, model_file_name)
-            
-            if not os.path.exists(file_path):
-                model_file_name = self.get_full_name() + ".pth"
-                file_path = os.path.join(self.model_path, model_file_name)
-            
-            if os.path.exists(file_path):
-                self.load_file(file_path)
         
     
     def load_best(self):
@@ -597,7 +596,7 @@ class Model:
             ax.legend()
     
     
-    def draw_history(self):
+    def draw_history(self, show_acc=False, show_loss=True, start=0):
         
         """
         Draw history
@@ -605,16 +604,24 @@ class Model:
         
         import matplotlib.pyplot as plt
         
-        fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-        self.draw_history_ax(ax[0],
-            ["train_acc_value", "val_acc_value"],
-            label="Accuracy",
-            convert=lambda x: x * 100
-        )
-        self.draw_history_ax(ax[1],
-            ["train_loss", "val_loss"],
-            label="Loss"
-        )
+        pos = 0
+        fig, ax = plt.subplots(1, show_acc + show_loss, figsize=(10, 4))
+        if show_acc:
+            self.draw_history_ax(
+                ax[pos] if isinstance(ax, np.ndarray) else ax,
+                ["train_acc_value", "val_acc_value"],
+                label="Accuracy",
+                convert=lambda x: x * 100,
+                start=start
+            )
+            pos += 1
+        if show_loss:
+            self.draw_history_ax(
+                ax[pos] if isinstance(ax, np.ndarray) else ax,
+                ["train_loss", "val_loss"],
+                label="Loss",
+                start=start
+            )
         plt.show()
     
     
@@ -629,9 +636,9 @@ class Model:
     
     
     def add_epoch(self,
-        train_batch_iter=None, train_batch_count=None,
+        train_batch_iter=None, train_count=None,
         train_acc=None, train_loss=None,
-        val_batch_iter=None, val_batch_count=None,
+        val_batch_iter=None, val_count=None,
         val_acc=None, val_loss=None,
         t=None, **kwargs
     ):
@@ -643,11 +650,11 @@ class Model:
         h = {
             "epoch": self.epoch,
             "train_batch_iter": train_batch_iter,
-            "train_batch_count": train_batch_count,
+            "train_count": train_count,
             "train_acc_sum": train_acc,
             "train_loss_sum": train_loss,
             "val_batch_iter": val_batch_iter,
-            "val_batch_count": val_batch_count,
+            "val_count": val_count,
             "val_acc_sum": val_acc,
             "val_loss_sum": val_loss,
             "train_loss": None,
@@ -670,17 +677,17 @@ class Model:
         
         elif self.loss_reduction == "sum":
             
-            if train_batch_count is not None and train_batch_count > 0:
-                h["train_loss"] = train_loss / train_batch_count
+            if train_count is not None and train_count > 0:
+                h["train_loss"] = train_loss / train_count
             
-            if val_batch_count is not None and val_batch_count > 0:
-                h["val_loss"] = val_loss / val_batch_count
+            if val_count is not None and val_count > 0:
+                h["val_loss"] = val_loss / val_count
         
-        if train_acc is not None and train_batch_count > 0:
-            h["train_acc"] = train_acc / train_batch_count
+        if train_acc is not None and train_count > 0:
+            h["train_acc"] = train_acc / train_count
         
-        if val_acc is not None and val_batch_count > 0:
-            h["val_acc"] = val_acc / val_batch_count
+        if val_acc is not None and val_count > 0:
+            h["val_acc"] = val_acc / val_count
         
         if h["train_acc"] is not None and h["val_acc"] is not None:
             h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
