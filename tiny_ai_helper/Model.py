@@ -121,6 +121,9 @@ class Model:
         Load model from file
         """
         
+        if not os.path.exists(file_path):
+            file_path = os.path.join(self.model_path, file_path)
+        
         save_metrics = torch.load(file_path)
         
         if "epoch" in save_metrics:
@@ -147,9 +150,9 @@ class Model:
                 self.scheduler.load_state_dict(state_dict)
             
             # Load loss
-            if "loss" in save_metrics:
-                state_dict = save_metrics["loss"]
-                self.loss.load_state_dict(state_dict)
+            #if "loss" in save_metrics:
+            #    state_dict = save_metrics["loss"]
+            #    self.loss.load_state_dict(state_dict)
         
         else:
             self.module.load_state_dict(save_metrics, strict=False)
@@ -251,7 +254,18 @@ class Model:
         model_file_name = self.get_full_name() + ".data"
         file_path = os.path.join(self.model_path, model_file_name)
         self.save_model(file_path)
+    
+    
+    def save_train_epoch(self):
         
+        """
+        Save train epoch
+        """
+        
+        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        file_path = os.path.join(self.model_path, model_file_name)
+        self.save_model(file_path)
+    
         
     def save_model(self, file_path=None):
         
@@ -272,8 +286,8 @@ class Model:
         if self.scheduler is not None:
             save_metrics["scheduler"] = self.scheduler.state_dict()
         
-        if self.loss is not None:
-            save_metrics["loss"] = self.loss.state_dict()
+        #if self.loss is not None:
+        #    save_metrics["loss"] = self.loss.state_dict()
         
         # Create folder
         if not os.path.isdir(self.model_path):

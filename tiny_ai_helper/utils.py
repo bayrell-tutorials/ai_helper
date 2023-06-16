@@ -328,7 +328,7 @@ def resize_image_canvas(image, size, color=None):
     return image_new
 
 
-def load_image(file_name, convert=None, load_as="numpy"):
+def load_image(file_name, convert=None, load_as=""):
     
     image = Image.open(file_name)
     
@@ -363,13 +363,12 @@ def draw_images(images, ncols=4, cmap=None, first_channel=False):
         image = images[i]
         
         if isinstance(image, str):
-            image = load_image(image)
-            image = torch.from_numpy( image )
+            image = load_image(image, load_as="torch")
         
-        elif isinstance(image, np.ndarray):
+        if isinstance(image, np.ndarray):
             pass
         
-        elif isinstance(image, torch.Tensor):
+        if isinstance(image, torch.Tensor):
             if first_channel:
                 image = image.permute(2, 1, 0)
         
@@ -387,10 +386,28 @@ def draw_images_grid(images, ncols=4, first_channel=False):
     import matplotlib.pyplot as plt
     from torchvision.utils import make_grid
     
-    if not first_channel:
-        images = [ image.permute(2, 1, 0) for image in images ]
+    if isinstance(images, list):
+        for index in range(len(images)):
+            
+            if isinstance(images[index], Image.Image):
+                images[index] = torch.from_numpy( np.array(images[index]) )
+            
+            if isinstance(images[index], np.ndarray):
+                images[index] = torch.from_numpy( images[index] )
+            
+            if not first_channel:
+                images[index] = images[index].permute(2, 1, 0)
     
-    plt.imshow(np.transpose(make_grid(images, nrow=math.ceil((len(images) - 1) / ncols))))
+    elif isinstance(images, torch.Tensor):
+        if not first_channel:
+            images = images.permute(0, 3, 2, 1)
+    
+    if ncols == -1:
+        nrow = 1
+    else:
+        nrow = math.ceil((len(images) - 1) / ncols)
+    
+    plt.imshow(np.transpose(make_grid(images, nrow=nrow)))
     plt.show()
 
 
@@ -652,7 +669,9 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
         
         # Module predict
         module.apply(add_hooks)
-        y = module(x)
+        with torch.no_grad():
+            module.eval()
+            y = module(x)
         
         # Clear cache
         if torch.cuda.is_available():
@@ -716,7 +735,8 @@ def compile(module):
 def fit(
     model, train_dataset, val_dataset,
     batch_size=64, epochs=10,
-    save_model=True, on_end_epoch=None,
+    save_model=False, on_end_epoch=None,
+    save_train_epoch=False, save_weights=False,
     one_line=False
 ):
     
@@ -894,9 +914,14 @@ def fit(
             
             if save_model:
                 model.save_last_model()
-                model.save_weights()
                 model.save_the_best_models()
                 model.save_history()
+                
+                if save_train_epoch:
+                    model.save_train_epoch()
+                
+                if save_weights:
+                    model.save_weights()
             
             if on_end_epoch is not None:
                 flag = on_end_epoch(model)
