@@ -623,7 +623,7 @@ class Model:
         if show_acc:
             self.draw_history_ax(
                 ax[pos] if isinstance(ax, np.ndarray) else ax,
-                ["train_acc_value", "val_acc_value"],
+                ["train_acc", "val_acc"],
                 label="Accuracy",
                 convert=lambda x: x * 100,
                 start=start

@@ -228,6 +228,7 @@ def split_dataset(dataset, k=0.2, indexes=None):
 
 
 def get_default_device():
+    
     """
     Returns default device
     """
@@ -238,11 +239,14 @@ def get_default_device():
 
 
 def get_acc_class(batch_predict, batch_y):
+    
     """
     Returns class accuracy
     """
     
-    batch_y = torch.argmax(batch_y, dim=1)
+    if len(batch_y.shape) == 2:
+        batch_y = torch.argmax(batch_y, dim=1)
+    
     batch_predict = torch.argmax(batch_predict, dim=1)
     acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
     
@@ -250,6 +254,7 @@ def get_acc_class(batch_predict, batch_y):
 
 
 def get_acc_binary(batch_predict, batch_y):
+    
     """
     Returns binary accuracy
     """
@@ -274,7 +279,7 @@ def resize_image(image, new_size, contain=True, color=None):
     """
     
     if isinstance(image, str):
-        image = Image.open(file_name)
+        image = Image.open(image)
     
     if isinstance(image, np.ndarray):
         image = Image.fromarray(image)
@@ -566,12 +571,13 @@ def load_json(file_name):
     return obj
 
 
-def summary(module, x, model_name=None, batch_transform=None, device=None):
+def summary(module, x, model_name=None, device=None):
         
         """
         Show model summary
         """
         
+        batch_transform = None
         hooks = []
         layers = []
         res = {
@@ -640,7 +646,8 @@ def summary(module, x, model_name=None, batch_transform=None, device=None):
         
         # Trasform
         if batch_transform is not None:
-            x, _ = batch_transform(x, None)
+            b = batch_transform({"x": x})
+            x = b["x"]
         
         # Move to device
         if device is not None:
@@ -741,6 +748,7 @@ def fit(
 ):
     
     device = model.device
+    model_name = model.get_full_name()
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -771,7 +779,7 @@ def fit(
     
     batch_transform = getattr(module, "batch_transform", None)
     
-    print ("Start train on " + str(device))
+    print ("Start train " + str(model_name) + " on " + str(device))
     try:
         while model.do_training(epochs):
             
@@ -837,7 +845,7 @@ def fit(
                 pos += batch_len
                 iter_value = round(pos / total_count * 100)
                 if train_acc_val > 0:
-                    print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(train_acc_val), end="")
+                    print(f"\rEpoch: {epoch}, {iter_value}%, acc: {train_acc_val}%", end="")
                 else:
                     print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
@@ -885,7 +893,7 @@ def fit(
                         pos += batch_len
                         iter_value = round(pos / total_count * 100)
                         if val_acc_val > 0:
-                            print(f"\rEpoch: {epoch}, {iter_value}%, acc: " + str(val_acc_val), end="")
+                            print(f"\rEpoch: {epoch}, {iter_value}%, acc: {val_acc_val}%", end="")
                         else:
                             print(f"\rEpoch: {epoch}, {iter_value}%", end="")
             
