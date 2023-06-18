@@ -328,10 +328,11 @@ class Model:
         if self.epoch >= max_epochs:
             return False
         
-        if self.optimizer.param_groups[0]["lr"] < self.min_lr:
-            return False
+        for item in self.optimizer.param_groups:
+            if item["lr"] >= self.min_lr:
+                return True
         
-        return True
+        return False
     
     
     def __call__(self, x):
@@ -545,12 +546,13 @@ class Model:
             
             file_type = ""
             epoch_index = 0
+            model_name = self.get_full_name()
             
-            result = re.match(r'^model-(?P<id>[0-9]+)\.data$', file_name)
+            result = re.match(r'^'+model_name+'-(?P<id>[0-9]+)\.data$', file_name)
             if result:
                 return "model", int(result.group("id"))
             
-            result = re.match(r'^model-(?P<id>[0-9]+)\.pth$', file_name)
+            result = re.match(r'^'+model_name+'-(?P<id>[0-9]+)\.pth$', file_name)
             if result:
                 return "model", int(result.group("id"))
             
@@ -748,7 +750,8 @@ class Model:
             val_loss = f.format(val_loss)
             msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
         
-        msg.append(f'lr: {res_lr_str}, t: {t}s')
+        #msg.append(f'lr: {res_lr_str}')
+        msg.append(f't: {t}s')
         
         return ", ".join(msg)
         
