@@ -27,6 +27,7 @@ class Model:
         self.loss_precision = 9
         self.best_metrics = ["epoch"]
         self.acc_fn = None
+        self.acc_reduction = 'sum'
         self.name = module.__class__.__name__
         self.prefix_name = ""
         self.epoch = 0
@@ -105,29 +106,9 @@ class Model:
         return self
     
     
-    def load_weights(self, file_path):
-        
-        """
-        Load weights
-        """
-        
-        state_dict = torch.load(file_path)
-        self.module.load_state_dict(state_dict, strict=False)
-        
-        
-    def load_file(self, file_path):
-        
-        """
-        Load model from file
-        """
-        
-        if not os.path.exists(file_path):
-            file_path = os.path.join(self.model_path, file_path)
-        
-        save_metrics = torch.load(file_path)
+    def load_state_dict(self, save_metrics, strict=False):
         
         if "epoch" in save_metrics:
-            
             self.epoch = save_metrics["epoch"]
             
             # Load history
@@ -137,7 +118,7 @@ class Model:
             # Load module
             if "module" in save_metrics:
                 state_dict = save_metrics["module"]
-                self.module.load_state_dict(state_dict, strict=False)
+                self.module.load_state_dict(state_dict, strict=strict)
             
             # Load optimizer
             if "optimizer" in save_metrics:
@@ -155,18 +136,21 @@ class Model:
             #    self.loss.load_state_dict(state_dict)
         
         else:
-            self.module.load_state_dict(save_metrics, strict=False)
-        
+            self.module.load_state_dict(save_metrics, strict=strict)
     
-    def load(self, file_name):
+    
+    def load_model(self, file_path, full_path=False):
         
         """
-        Load model by file name
+        Load model from file
         """
         
-        file_path = os.path.join(self.model_path, file_name)
-        self.load_file(file_path)
-    
+        if not os.path.exists(file_path) and not full_path:
+            file_path = os.path.join(self.model_path, file_path)
+        
+        save_metrics = torch.load(file_path)
+        self.load_state_dict(save_metrics)
+        
     
     def load_epoch(self, epoch):
         
@@ -174,14 +158,14 @@ class Model:
         Load epoch
         """
         
-        model_file_name = self.get_full_name() + "-" + str(epoch) + ".data"
-        file_path = os.path.join(self.model_path, model_file_name)
+        file_name = self.get_full_name() + "-" + str(epoch) + ".data"
+        file_path = os.path.join(self.model_path, file_name)
         
         if not os.path.exists(file_path):
-            model_file_name = self.get_full_name() + "-" + str(epoch) + ".pth"
-            file_path = os.path.join(self.model_path, model_file_name)
+            file_name = self.get_full_name() + "-" + str(epoch) + ".pth"
+            file_path = os.path.join(self.model_path, file_name)
         
-        self.load_file(file_path)
+        self.load_model(file_path, full_path=True)
         
         
     def load_last(self):
@@ -190,15 +174,15 @@ class Model:
         Load last model
         """
         
-        model_file_name = self.get_full_name() + ".data"
-        file_path = os.path.join(self.model_path, model_file_name)
+        file_name = self.get_full_name() + ".data"
+        file_path = os.path.join(self.model_path, file_name)
         
         if not os.path.exists(file_path):
-            model_file_name = self.get_full_name() + ".pth"
-            file_path = os.path.join(self.model_path, model_file_name)
+            file_name = self.get_full_name() + ".pth"
+            file_path = os.path.join(self.model_path, file_name)
         
         if os.path.exists(file_path):
-            self.load_file(file_path)
+            self.load_model(file_path, full_path=True)
             return
         
         file_name = os.path.join(self.model_path, "history.json")
@@ -217,16 +201,29 @@ class Model:
         Load best model
         """
         
-        file_name = os.path.join(self.model_path, "history.json")
+        file_path = os.path.join(self.model_path, "history.json")
         
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_path):
             return
         
-        obj = load_json(file_name)
+        obj = load_json(file_path)
         
         if obj is not None:
             best_epoch = obj["best_epoch"]
             self.load_epoch(best_epoch)
+    
+    
+    def save_weights_epoch(self, file_path=None):
+        
+        """
+        Save weights
+        """
+        
+        if file_path is None:
+            file_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
+            file_path = os.path.join(self.model_path, file_name)
+        
+        torch.save(self.module.state_dict(), file_path)
     
     
     def save_weights(self, file_path=None):
@@ -236,24 +233,10 @@ class Model:
         """
         
         if file_path is None:
-            model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
-            file_path = os.path.join(
-                self.model_path,
-                model_file_name
-            )
+            file_name = self.get_full_name() + ".pth"
+            file_path = os.path.join(self.model_path, file_name)
         
         torch.save(self.module.state_dict(), file_path)
-    
-    
-    def save_last_model(self):
-        
-        """
-        Save last model
-        """
-        
-        model_file_name = self.get_full_name() + ".data"
-        file_path = os.path.join(self.model_path, model_file_name)
-        self.save_model(file_path)
     
     
     def save_train_epoch(self):
@@ -262,8 +245,8 @@ class Model:
         Save train epoch
         """
         
-        model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
-        file_path = os.path.join(self.model_path, model_file_name)
+        file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        file_path = os.path.join(self.model_path, file_name)
         self.save_model(file_path)
     
         
@@ -295,8 +278,9 @@ class Model:
         
         # Save model to file
         if file_path is None:
-            model_file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+            model_file_name = self.get_full_name() + ".data"
             file_path = os.path.join(self.model_path, model_file_name)
+        
         torch.save(save_metrics, file_path)
     
     
@@ -475,24 +459,27 @@ class Model:
         return res
     
     
-    def get_the_best_epoch(self):
+    def get_the_best_epoch(self, best_metrics=None):
         
         """
         Returns the best epoch
         """
         
-        epoch_indexes = self.get_the_best_epochs_indexes(1)
+        epoch_indexes = self.get_the_best_epochs_indexes(1, best_metrics)
         best_epoch = epoch_indexes[0] if len(epoch_indexes) > 0 else 0
         return best_epoch
     
     
-    def get_the_best_epochs_indexes(self, epoch_count=5):
+    def get_the_best_epochs_indexes(self, epoch_count=5, best_metrics=None):
         
         """
         Returns best epoch indexes
         """
         
-        metrics = self.get_metrics(self.best_metrics, convert=True)
+        if best_metrics is None:
+            best_metrics = self.best_metrics
+        
+        metrics = self.get_metrics(best_metrics, convert=True)
         metrics.sort(key=lambda x: x[1:])
         
         res = []
@@ -516,22 +503,22 @@ class Model:
         return res
     
     
-    def get_best_epoch(self):
+    def get_best_epoch(self, best_metrics=None):
         
         """
         Returns the best epoch
         """
         
-        return self.get_the_best_epoch()
+        return self.get_the_best_epoch(best_metrics)
     
     
-    def get_best_epochs(self, epoch_count=5):
+    def get_best_epochs(self, epoch_count=5, best_metrics=None):
         
         """
         Returns best epoch indexes
         """
         
-        return self.get_the_best_epochs_indexes(epoch_count)
+        return self.get_the_best_epochs_indexes(epoch_count, best_metrics)
     
     
     def save_the_best_models(self):
@@ -699,11 +686,21 @@ class Model:
             if val_count is not None and val_count > 0:
                 h["val_loss"] = val_loss / val_count
         
-        if train_acc is not None and train_count > 0:
-            h["train_acc"] = train_acc / train_count
+        if self.acc_reduction == "mean":
+            
+            if train_acc is not None and train_count > 0:
+                h["train_acc"] = train_acc / train_batch_iter
+            
+            if val_acc is not None and val_count > 0:
+                h["val_acc"] = val_acc / val_batch_iter
         
-        if val_acc is not None and val_count > 0:
-            h["val_acc"] = val_acc / val_count
+        elif self.acc_reduction == "sum":
+            
+            if train_acc is not None and train_count > 0:
+                h["train_acc"] = train_acc / train_count
+            
+            if val_acc is not None and val_count > 0:
+                h["val_acc"] = val_acc / val_count
         
         if h["train_acc"] is not None and h["val_acc"] is not None:
             h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0

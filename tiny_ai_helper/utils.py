@@ -253,7 +253,17 @@ def get_acc_class(batch_predict, batch_y):
     return acc
 
 
-def get_acc_binary(batch_predict, batch_y):
+def get_acc_binary(treshold=0.5):
+    
+    def f(batch_predict, batch_y):
+        
+        batch_predict = (batch_predict >= treshold) * 1.0
+        acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+        
+        return acc
+        
+    return f
+    
     
     """
     Returns binary accuracy
@@ -571,6 +581,55 @@ def load_json(file_name):
     return obj
 
 
+def load_epoch(model, model_name, epoch, repository_path="model"):
+        
+    """
+    Load epoch
+    """
+    
+    model_path = os.path.join(repository_path, model_name)
+    
+    file_name = model_name + "-" + str(epoch) + ".data"
+    file_path = os.path.join(model_path, file_name)
+    
+    if not os.path.exists(file_path):
+        file_name = model_name + "-" + str(epoch) + ".pth"
+        file_path = os.path.join(model_path, file_name)
+    
+    load_model_from_file(model, file_path)
+
+
+def load_model(model, model_name, file_name, repository_path="model"):
+    
+    """
+    Load model
+    """
+    
+    model_path = os.path.join(repository_path, model_name)
+    file_path = os.path.join(model_path, file_name)
+    
+    if not os.path.exists(file_path):
+        file_path = os.path.join(model_path, file_name)
+    
+    load_model_from_file(model, file_path)
+    
+
+def load_model_from_file(model, file_path):
+        
+    """
+    Load model from file
+    """
+    
+    save_metrics = torch.load(file_path)
+    state_dict = save_metrics
+    
+    if "epoch" in save_metrics:
+        if isinstance(model, nn.Module):
+            state_dict = save_metrics["module"]
+    
+    model.load_state_dict(state_dict, strict=False)
+
+
 def summary(module, x, model_name=None, device=None):
         
         """
@@ -597,6 +656,9 @@ def summary(module, x, model_name=None, device=None):
                 "shape": output.shape,
                 "params": 0
             }
+            
+            if layer["name"] == model_name:
+                layer["name"] = "Output"
             
             # Get weight
             if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
@@ -742,9 +804,8 @@ def compile(module):
 def fit(
     model, train_dataset, val_dataset,
     batch_size=64, epochs=10,
-    save_model=False, on_end_epoch=None,
-    save_train_epoch=False, save_weights=False,
-    one_line=False
+    save_model=True, save_train=False, save_weights=True,
+    one_line=False, on_end_epoch=None,
 ):
     
     device = model.device
@@ -835,7 +896,10 @@ def fit(
                 # Calc accuracy
                 if acc_fn is not None:
                     train_acc += acc_fn(y_pred, y_batch)
-                    train_acc_val = round(train_acc / train_count * 10000) / 100
+                    if model.acc_reduction == "sum":
+                        train_acc_val = round(train_acc / train_count * 10000) / 100
+                    else:
+                        train_acc_val = round(train_acc / len(train_loss) * 10000) / 100
                 
                 del x_batch, y_batch, y_pred, loss
 
@@ -883,7 +947,10 @@ def fit(
                         # Calc accuracy
                         if acc_fn is not None:
                             val_acc += acc_fn(y_pred, y_batch)
-                            val_acc_val = round(val_acc / val_count * 10000) / 100
+                            if model.acc_reduction == "sum":
+                                val_acc_val = round(val_acc / val_count * 10000) / 100
+                            else:
+                                val_acc_val = round(val_acc / len(val_loss) * 10000) / 100
                         
                         del x_batch, y_batch, y_pred, loss
 
@@ -921,15 +988,18 @@ def fit(
                 print( model.get_epoch_string(epoch) )
             
             if save_model:
-                model.save_last_model()
+                model.save_model()
+            
+            if save_train:
+                model.save_train_epoch()
+            
+            if save_weights:
+                model.save_weights_epoch()
+            
+            if save_train or save_weights:
                 model.save_the_best_models()
-                model.save_history()
-                
-                if save_train_epoch:
-                    model.save_train_epoch()
-                
-                if save_weights:
-                    model.save_weights()
+            
+            model.save_history()
             
             if on_end_epoch is not None:
                 flag = on_end_epoch(model)
@@ -1032,3 +1102,15 @@ def colab_download_history_from_google_drive(model, path):
     dest_file_path = os.path.join(model.model_path, "history.json")
     
     shutil.copy(src_file_path, dest_file_path)
+
+
+class ListDataset(Dataset):
+    
+    def __init__(self, items):
+        self.items = items
+    
+    def __getitem__(self, index: int):
+        return self.items[index]
+    
+    def __len__(self) -> int:
+        return len(self.items)
