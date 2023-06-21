@@ -266,7 +266,7 @@ class Pipe(torch.nn.Module):
         return value
 
 
-class ModuleRemoveLastClassifier(PreparedModule):
+class RemoveLastClassifier(PreparedModule):
     
     def __init__(self, module, weight_path=None, requires_grad=False, *args, **kwargs):
         
@@ -278,7 +278,7 @@ class ModuleRemoveLastClassifier(PreparedModule):
         self.module.classifier = torch.nn.Sequential(*classifier)
 
 
-class ModuleRemoveAllClassifier(PreparedModule):
+class RemoveAllClassifier(PreparedModule):
     
     def __init__(self, module, weight_path=None, requires_grad=False, *args, **kwargs):
         PreparedModule.__init__(self, module, weight_path, requires_grad, *args, **kwargs)
