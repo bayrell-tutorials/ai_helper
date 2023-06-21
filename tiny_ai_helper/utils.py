@@ -354,8 +354,7 @@ def load_image(file_name, convert=None, load_as=""):
         image = np.array(image)
     
     elif load_as == "torch":
-        image = np.array(image)
-        image = torch.from_numpy(image)
+        image = torch.from_numpy(np.array(image))
     
     return image
 
@@ -384,8 +383,8 @@ def draw_images(images, ncols=4, cmap=None, first_channel=False):
             pass
         
         if isinstance(image, torch.Tensor):
-            if first_channel:
-                image = image.permute(2, 1, 0)
+            if first_channel == True:
+                image = move_rgb_to_end(image)
         
         ax[i].imshow(image, cmap)
 
@@ -396,7 +395,7 @@ def draw_images(images, ncols=4, cmap=None, first_channel=False):
     plt.show()
 
 
-def draw_images_grid(images, ncols=4, first_channel=False):
+def draw_images_grid(images, ncols=4, first_channel=False, *args, **kwargs):
     
     import matplotlib.pyplot as plt
     from torchvision.utils import make_grid
@@ -411,18 +410,13 @@ def draw_images_grid(images, ncols=4, first_channel=False):
                 images[index] = torch.from_numpy( images[index] )
             
             if not first_channel:
-                images[index] = images[index].permute(2, 1, 0)
+                images[index] = move_rgb_to_begin(images[index])
     
     elif isinstance(images, torch.Tensor):
         if not first_channel:
-            images = images.permute(0, 3, 2, 1)
+            images = move_rgb_to_begin(images)
     
-    if ncols == -1:
-        nrow = 1
-    else:
-        nrow = math.ceil((len(images) - 1) / ncols)
-    
-    plt.imshow(np.transpose(make_grid(images, nrow=nrow)))
+    plt.imshow(move_rgb_to_end(make_grid(images, nrow=ncols, *args, **kwargs)))
     plt.show()
 
 
@@ -440,12 +434,29 @@ def draw_image(image, cmap=None, first_channel=False):
     
     elif torch.is_tensor(image):
         if first_channel == True:
-            image = torch.moveaxis(image, 0, 2)
+            image = move_rgb_to_end(image)
     
     import matplotlib.pyplot as plt
     
     plt.imshow(image, cmap)
     plt.show()
+
+
+def move_rgb_to_end(t):
+    l = len(t.shape)
+    t = torch.moveaxis(t, l-3, l-1)
+    return t
+
+
+def move_rgb_to_begin(t):
+    l = len(t.shape)
+    t = torch.moveaxis(t, l-1, l-3)
+    return t
+
+def swap_hw(t):
+    l = len(t.shape)
+    t = torch.moveaxis(t, l-1, l-2)
+    return t
 
 
 def list_files(path="", recursive=True, full_path=False):
