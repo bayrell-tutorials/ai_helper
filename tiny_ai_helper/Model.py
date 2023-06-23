@@ -319,6 +319,11 @@ class Model:
         return False
     
     
+    def set_new_lr(self, lr):
+        for index, param_group in enumerate(self.optimizer.param_groups):
+            param_group['lr'] = lr[index]
+    
+    
     def __call__(self, x):
         return self.module(x)
     
@@ -797,3 +802,83 @@ class Model:
             value = 0
         return value
     
+    
+    def upload_to_google_drive(self, epoch, repository_path):
+        
+        import shutil
+    
+        if not os.path.exists('/content/drive'):
+            from google.colab import drive
+            drive.mount('/content/drive')
+        
+        dest_path = os.path.join(repository_path, self.get_full_name())
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path)
+        
+        def upload(file_name):
+            src_file_path = os.path.join(self.model_path, file_name)
+            if os.path.exists(src_file_path):
+                dest_file_path = os.path.join(dest_path, file_name)
+                shutil.copy(src_file_path, dest_file_path)
+
+        upload(self.get_full_name() + "-" + str(self.epoch) + ".data")
+        upload(self.get_full_name() + "-" + str(self.epoch) + ".pth")
+    
+    
+    def download_from_google_drive(self, epoch, repository_path):
+        
+        import shutil
+        
+        if not os.path.exists('/content/drive'):
+            from google.colab import drive
+            drive.mount('/content/drive')
+        
+        src_path = os.path.join(repository_path, self.get_full_name())
+        if not os.path.exists(self.model_path):
+            os.makedirs(self.model_path)
+        
+        def download(file_name):
+            src_file_path = os.path.join(src_path, file_name)
+            if os.path.exists(src_file_path):
+                dest_file_path = os.path.join(self.model_path, file_name)
+                shutil.copy(src_file_path, dest_file_path)
+
+        download(self.get_full_name() + "-" + str(self.epoch) + ".data")
+        download(self.get_full_name() + "-" + str(self.epoch) + ".pth")
+    
+    
+    def upload_history_to_google_drive(self, repository_path):
+    
+        import shutil
+        
+        if not os.path.exists('/content/drive'):
+            from google.colab import drive
+            drive.mount('/content/drive')
+        
+        if not os.path.exists(repository_path):
+            os.makedirs(repository_path)
+        
+        dest_path = os.path.join(repository_path, self.get_full_name())
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path)
+        
+        src_file_path = os.path.join(self.model_path, "history.json")
+        dest_file_path = os.path.join(dest_path, "history.json")
+        shutil.copy(src_file_path, dest_file_path)
+    
+    
+    def download_history_from_google_drive(self, repository_path):
+    
+        import shutil
+        
+        if not os.path.exists('/content/drive'):
+            from google.colab import drive
+            drive.mount('/content/drive')
+        
+        if not os.path.exists(self.model_path):
+            os.makedirs(self.model_path)
+        
+        src_path = os.path.join(repository_path, self.get_full_name())
+        src_file_path = os.path.join(src_path, "history.json")
+        dest_file_path = os.path.join(self.model_path, "history.json")
+        shutil.copy(src_file_path, dest_file_path)
