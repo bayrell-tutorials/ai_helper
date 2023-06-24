@@ -821,8 +821,8 @@ class Model:
                 dest_file_path = os.path.join(dest_path, file_name)
                 shutil.copy(src_file_path, dest_file_path)
 
-        upload(self.get_full_name() + "-" + str(self.epoch) + ".data")
-        upload(self.get_full_name() + "-" + str(self.epoch) + ".pth")
+        upload(self.get_full_name() + "-" + str(epoch) + ".data")
+        upload(self.get_full_name() + "-" + str(epoch) + ".pth")
     
     
     def download_from_google_drive(self, epoch, repository_path):
@@ -843,8 +843,8 @@ class Model:
                 dest_file_path = os.path.join(self.model_path, file_name)
                 shutil.copy(src_file_path, dest_file_path)
 
-        download(self.get_full_name() + "-" + str(self.epoch) + ".data")
-        download(self.get_full_name() + "-" + str(self.epoch) + ".pth")
+        download(self.get_full_name() + "-" + str(epoch) + ".data")
+        download(self.get_full_name() + "-" + str(epoch) + ".pth")
     
     
     def upload_history_to_google_drive(self, repository_path):
