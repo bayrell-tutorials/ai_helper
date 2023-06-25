@@ -401,6 +401,7 @@ def draw_images_grid(images, ncols=4, first_channel=False, *args, **kwargs):
     from torchvision.utils import make_grid
     
     if isinstance(images, list):
+        images = images.copy()
         for index in range(len(images)):
             
             if isinstance(images[index], Image.Image):
