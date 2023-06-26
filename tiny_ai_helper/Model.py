@@ -137,6 +137,8 @@ class Model:
         
         else:
             self.module.load_state_dict(save_metrics, strict=strict)
+        
+        return self
     
     
     def load_model(self, file_path, full_path=False):
@@ -150,6 +152,8 @@ class Model:
         
         save_metrics = torch.load(file_path)
         self.load_state_dict(save_metrics)
+        
+        return self
         
     
     def load_epoch(self, epoch):
@@ -167,6 +171,8 @@ class Model:
         
         self.load_model(file_path, full_path=True)
         
+        return self
+        
         
     def load_last(self):
         
@@ -183,7 +189,7 @@ class Model:
         
         if os.path.exists(file_path):
             self.load_model(file_path, full_path=True)
-            return
+            return self
         
         file_name = os.path.join(self.model_path, "history.json")
         if os.path.exists(file_name):
@@ -193,6 +199,8 @@ class Model:
             if obj is not None:
                 epoch = obj["epoch"]
                 self.load_epoch(epoch)
+        
+        return self
         
     
     def load_best(self):
@@ -204,13 +212,15 @@ class Model:
         file_path = os.path.join(self.model_path, "history.json")
         
         if not os.path.exists(file_path):
-            return
+            return self
         
         obj = load_json(file_path)
         
         if obj is not None:
             best_epoch = obj["best_epoch"]
             self.load_epoch(best_epoch)
+        
+        return self
     
     
     def save_weights_epoch(self, file_path=None):
@@ -224,6 +234,8 @@ class Model:
             file_path = os.path.join(self.model_path, file_name)
         
         torch.save(self.module.state_dict(), file_path)
+        
+        return self
     
     
     def save_weights(self, file_path=None):
@@ -237,6 +249,8 @@ class Model:
             file_path = os.path.join(self.model_path, file_name)
         
         torch.save(self.module.state_dict(), file_path)
+        
+        return self
     
     
     def save_train_epoch(self):
@@ -248,6 +262,8 @@ class Model:
         file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
         file_path = os.path.join(self.model_path, file_name)
         self.save_model(file_path)
+        
+        return self
     
         
     def save_model(self, file_path=None):
@@ -282,6 +298,8 @@ class Model:
             file_path = os.path.join(self.model_path, model_file_name)
         
         torch.save(save_metrics, file_path)
+        
+        return self
     
     
     def save_history(self):
@@ -301,6 +319,8 @@ class Model:
         file = open(file_name, "w")
         file.write(json_str)
         file.close()
+        
+        return self
     
     
     def do_training(self, max_epochs):
@@ -320,8 +340,11 @@ class Model:
     
     
     def set_new_lr(self, lr):
+        
         for index, param_group in enumerate(self.optimizer.param_groups):
             param_group['lr'] = lr[index]
+        
+        return self
     
     
     def __call__(self, x):
@@ -595,7 +618,8 @@ class Model:
             values = [ item[index + 1] for item in metrics_values ]
             if convert:
                 values = list(map(convert, values))
-            ax.plot( values, label=name)
+            if len(values) > 0 and values[0] is not None:
+                ax.plot( values, label=name)
         
         if label:
             ax.set_xlabel( label )
@@ -619,7 +643,7 @@ class Model:
                 ax[pos] if isinstance(ax, np.ndarray) else ax,
                 ["train_acc", "val_acc"],
                 label="Accuracy",
-                convert=lambda x: x * 100,
+                convert=lambda x: x * 100 if x is not None else None,
                 start=start
             )
             pos += 1
@@ -643,74 +667,90 @@ class Model:
             print(s)
     
     
-    def add_epoch(self,
-        train_batch_iter=None, train_count=None,
-        train_acc=None, train_loss=None,
-        val_batch_iter=None, val_count=None,
-        val_acc=None, val_loss=None,
-        t=None, **kwargs
-    ):
+    def get_epoch_train_status(self):
+        
+        status = {
+            "epoch": self.epoch,
+            "time_start": 0,
+            "time_end": 0,
+            "train_acc": None,
+            "train_acc_items": [],
+            "train_acc_sum": 0,
+            "train_count": 0,
+            "train_loss": None,
+            "train_loss_items": [],
+            "train_batch_iter": 0,
+            "val_acc": None,
+            "val_acc_items": [],
+            "val_acc_sum": 0,
+            "val_count": 0,
+            "val_loss": None,
+            "val_loss_items": [],
+            "val_batch_iter": 0,
+            "total_count": 0,
+            "pos": 0,
+            "t": 0,
+        }
+        
+        if self.acc_fn is None:
+            status["train_acc_sum"] = None
+            status["val_acc_sum"] = None
+        
+        return status
+    
+    def add_epoch(self, **h):
     
         lr = []
         for param_group in self.optimizer.param_groups:
             lr.append( round(param_group['lr'], 7) )
         
-        h = {
-            "epoch": self.epoch,
-            "train_batch_iter": train_batch_iter,
-            "train_count": train_count,
-            "train_acc_sum": train_acc,
-            "train_loss_sum": train_loss,
-            "val_batch_iter": val_batch_iter,
-            "val_count": val_count,
-            "val_acc_sum": val_acc,
-            "val_loss_sum": val_loss,
-            "train_loss": None,
-            "train_acc": None,
-            "val_loss": None,
-            "val_acc": None,
-            "rel": None,
-            "lr": lr,
-            "t": t,
-            **kwargs
-        }
+        h["train_loss"] = None
+        h["train_acc"] = None
+        h["val_loss"] = None
+        h["val_acc"] = None
+        h["rel"] = None
+        h["lr"] = lr
+        
+        train_count = h["train_count"]
+        val_count = h["val_count"]
         
         if self.loss_reduction == "mean":
             
-            if train_batch_iter is not None and train_batch_iter > 0:
-                h["train_loss"] = train_loss / train_batch_iter
+            if len(h["train_loss_items"]) > 0:
+                h["train_loss"] = sum(h["train_loss_items"]) / len(h["train_loss_items"])
             
-            if val_batch_iter is not None and val_batch_iter > 0:
-                h["val_loss"] = val_loss / val_batch_iter
+            if len(h["val_loss_items"]) > 0:
+                h["val_loss"] = sum(h["val_loss_items"]) / len(h["val_loss_items"])
         
         elif self.loss_reduction == "sum":
             
-            if train_count is not None and train_count > 0:
-                h["train_loss"] = train_loss / train_count
+            if train_count > 0:
+                h["train_loss"] = sum(h["train_loss_items"]) / train_count
             
-            if val_count is not None and val_count > 0:
-                h["val_loss"] = val_loss / val_count
+            if val_count > 0:
+                h["val_loss"] = sum(h["val_loss_items"]) / val_count
         
         if self.acc_reduction == "mean":
             
-            if train_acc is not None and train_count > 0:
-                h["train_acc"] = train_acc / train_batch_iter
+            if len(h["train_acc_items"]) > 0:
+                h["train_acc"] = sum(h["train_acc_items"]) / len(h["train_acc_items"])
             
-            if val_acc is not None and val_count > 0:
-                h["val_acc"] = val_acc / val_batch_iter
+            if len(h["val_acc_items"]) > 0:
+                h["val_acc"] = sum(h["val_acc_items"]) / len(h["val_acc_items"])
         
         elif self.acc_reduction == "sum":
             
-            if train_acc is not None and train_count > 0:
-                h["train_acc"] = train_acc / train_count
+            if train_count > 0:
+                h["train_acc"] = sum(h["train_acc_items"]) / train_count
             
-            if val_acc is not None and val_count > 0:
-                h["val_acc"] = val_acc / val_count
+            if val_count > 0:
+                h["val_acc"] = sum(h["val_acc_items"]) / val_count
         
         if h["train_acc"] is not None and h["val_acc"] is not None:
             h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
         
-        self.history[self.epoch] = h
+        epoch = h["epoch"]
+        self.history[epoch] = h.copy()
     
     
     def get_epoch_string(self, epoch):
@@ -728,35 +768,84 @@ class Model:
         res_lr = res["lr"] if "lr" in res else []
         res_lr_str = str(res_lr)
         
-        # Get result
-        f = "{:."+str(self.loss_precision)+"f}"
-        train_loss = f.format(train_loss)
-        
         msg = []
         msg.append(f'\rEpoch: {epoch}')
         
-        if self.acc_fn is not None:
+        if train_acc is not None:
             train_acc = round(train_acc * 10000) / 100
-            
-            if val_count == 0:
-                msg.append(f'train_acc: {train_acc}%')
-            else:
-                val_acc = round(val_acc * 10000) / 100
-                acc_rel = res["rel"] if "rel" in res else 0
-                acc_rel = round(acc_rel * 1000) / 1000
-                msg.append(f'train_acc: {train_acc}%, val_acc: {val_acc}%, rel: {acc_rel}')
+            msg.append(f'train_acc: {train_acc}%')
         
-        if val_count == 0:
+        if val_acc is not None:
+            val_acc = round(val_acc * 10000) / 100
+            msg.append(f'val_acc: {val_acc}%')
+        
+        if "rel" in res and res["rel"] is not None:
+            acc_rel = round(res["rel"] * 1000) / 1000
+            msg.append(f'rel: {acc_rel}')
+        
+        if train_loss is not None:
+            f = "{:."+str(self.loss_precision)+"f}"
+            train_loss = f.format(train_loss)
             msg.append(f'train_loss: {train_loss}')
-        else:
+        
+        if val_loss is not None:
+            f = "{:."+str(self.loss_precision)+"f}"
             val_loss = f.format(val_loss)
-            msg.append(f'train_loss: {train_loss}, val_loss: {val_loss}')
+            msg.append(f'val_loss: {val_loss}')
         
         #msg.append(f'lr: {res_lr_str}')
         msg.append(f't: {t}s')
         
         return ", ".join(msg)
+    
+    
+    def get_iter_string(self, kind, params, status):
         
+        epoch = status["epoch"]
+        train_count = status["train_count"]
+        train_acc_items = status["train_acc_items"]
+        train_loss_items = status["train_loss_items"]
+        val_count = status["val_count"]
+        val_acc_items = status["val_acc_items"]
+        val_loss_items = status["val_loss_items"]
+        
+        iter_value = 0
+        if status["total_count"] > 0:
+            iter_value = status["pos"] / status["total_count"]
+        iter_value = round(iter_value * 100)
+        
+        if kind == "train":
+            
+            train_acc_val = 0
+            if len(train_acc_items) > 0:
+                train_acc_sum = sum(train_acc_items)
+                if self.acc_reduction == "sum":
+                    if train_count > 0:
+                        train_acc_val = round(train_acc_sum / train_count * 10000) / 100
+                else:
+                    train_acc_val = round(train_acc_sum / len(train_acc_items) * 10000) / 100
+            
+            if train_acc_val > 0:
+                return f"Epoch: {epoch}, {iter_value}%, acc: {train_acc_val}%"
+            else:
+                return f"Epoch: {epoch}, {iter_value}%"
+        
+        if kind == "val":
+            
+            val_acc_val = 0
+            if len(val_acc_items) > 0:
+                val_acc_sum = sum(val_acc_items)
+                if self.acc_reduction == "sum":
+                    if val_count > 0:
+                        val_acc_val = round(val_acc_sum / val_count * 10000) / 100
+                else:
+                    val_acc_val = round(val_acc_sum / len(val_acc_items) * 10000) / 100
+            
+            if val_acc_val > 0:
+                return f"Epoch: {epoch}, {iter_value}%, acc: {val_acc_val}%"
+            else:
+                return f"Epoch: {epoch}, {iter_value}%"
+    
     
     def get_train_loss(self, epoch=None):
         if epoch is None:

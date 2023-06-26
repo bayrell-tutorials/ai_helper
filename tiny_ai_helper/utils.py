@@ -814,11 +814,25 @@ def compile(module):
 
 
 def fit(
-    model, train_dataset, val_dataset,
+    model, train_dataset=None, val_dataset=None,
     batch_size=64, epochs=10,
     save_model=True, save_train=True, save_weights=True,
-    one_line=False, on_end_epoch=None,
+    progress=True, one_line=False, callbacks=None, forward=None,
+    do_train=True, do_val=True,
+    **params
 ):
+    
+    params["model"] = model
+    params["train_dataset"] = train_dataset
+    params["val_dataset"] = val_dataset
+    params["batch_size"] = batch_size
+    params["epochs"] = epochs
+    params["save_model"] = save_model
+    params["save_train"] = save_train
+    params["save_weights"] = save_weights
+    params["progress"] = progress
+    params["one_line"] = one_line
+    params["callbacks"] = callbacks
     
     device = model.device
     model_name = model.get_full_name()
@@ -826,13 +840,16 @@ def fit(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     
+    # Train loader
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         drop_last=False,
         shuffle=True
     )
+    params["train_loader"] = train_loader
     
+    # Val loader
     val_loader = None
     if val_dataset:
         val_loader = DataLoader(
@@ -841,6 +858,7 @@ def fit(
             drop_last=False,
             shuffle=False
         )
+        params["val_loader"] = val_loader
     
     acc_fn = model.acc_fn
     device = model.device
@@ -852,152 +870,164 @@ def fit(
     
     batch_transform = getattr(module, "batch_transform", None)
     
+    
+    def call_callback(name, params, status=None):
+        if callbacks is not None:
+            for callback in callbacks:
+                if hasattr(callback, name):
+                    f = getattr(callback, name, None)
+                    if f is not None:
+                        f(params=params, status=status)
+    
+    
+    call_callback("on_start", params)
+    
     print ("Start train " + str(model_name) + " on " + str(device))
     try:
         while model.do_training(epochs):
             
+            model.epoch = model.epoch + 1
             time_start = time.time()
-            train_count = 0
-            train_loss = []
-            train_iter = 0
-            train_acc = 0
-            val_count = 0
-            val_loss = []
-            val_iter = 0
-            val_acc = 0
             
-            total_count = len(train_dataset)
+            status = model.get_epoch_train_status()
+            
+            status["total_count"] = len(train_dataset)
             if val_dataset is not None:
-                total_count += len(val_dataset)
+                status["total_count"] += len(val_dataset)
             
-            pos = 0
+            call_callback("on_start_epoch", params, status)
             
-            epoch = model.epoch + 1
-            
-            # train mode
-            model.train()
-            
-            for batch in train_loader:
+            if do_train != False:
                 
-                # data to device
-                if batch_transform:
-                    batch = batch_transform(batch)
+                # Train mode
+                model.train()
                 
-                x_batch = batch["x"].to(device)
-                y_batch = batch["y"].to(device)
-                
-                # set parameter gradients to zero
-                optimizer.zero_grad()
-                
-                # forward
-                y_pred = module(x_batch)
-                loss = loss_fn(y_pred, y_batch)
-                loss.backward()
-                optimizer.step()
-
-                # add metrics
-                batch_len = len(x_batch[0]) \
-                    if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
-                    else len(x_batch)
-                
-                train_loss.append( loss.item() )
-                train_count += batch_len
-                
-                train_acc_val = 0
-
-                # Calc accuracy
-                if acc_fn is not None:
-                    train_acc += acc_fn(y_pred, y_batch)
-                    if model.acc_reduction == "sum":
-                        train_acc_val = round(train_acc / train_count * 10000) / 100
-                    else:
-                        train_acc_val = round(train_acc / len(train_loss) * 10000) / 100
-                
-                del x_batch, y_batch, y_pred, loss
-
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                
-                pos += batch_len
-                iter_value = round(pos / total_count * 100)
-                if train_acc_val > 0:
-                    print(f"\rEpoch: {epoch}, {iter_value}%, acc: {train_acc_val}%", end="")
-                else:
-                    print(f"\rEpoch: {epoch}, {iter_value}%", end="")
-            
-            
-            if val_loader is not None:
-                with torch.no_grad():
-
-                    # testing mode
-                    model.eval()
+                for batch in train_loader:
                     
-                    for batch in val_loader:
+                    batch_len = len(batch["x"][0]) \
+                        if isinstance(batch["x"], tuple) or isinstance(batch["x"], list) \
+                        else len(batch["x"])
+                    
+                    # Set parameter gradients to zero
+                    optimizer.zero_grad()
+                    
+                    # Forward
+                    if forward is None:
                         
-                        # data to device
+                        # Data to device
                         if batch_transform:
                             batch = batch_transform(batch)
                         
                         x_batch = batch["x"].to(device)
                         y_batch = batch["y"].to(device)
                         
-                        # forward
                         y_pred = module(x_batch)
                         loss = loss_fn(y_pred, y_batch)
                         
-                        # add metrics
-                        batch_len = len(x_batch[0]) \
-                            if isinstance(x_batch, tuple) or isinstance(x_batch, list) \
-                            else len(x_batch)
-                        
-                        val_loss.append( loss.item() )
-                        val_count += batch_len
-                        val_iter += 1
-                        
-                        val_acc_val = 0
-                        
                         # Calc accuracy
                         if acc_fn is not None:
-                            val_acc += acc_fn(y_pred, y_batch)
-                            if model.acc_reduction == "sum":
-                                val_acc_val = round(val_acc / val_count * 10000) / 100
-                            else:
-                                val_acc_val = round(val_acc / len(val_loss) * 10000) / 100
+                            status["train_acc_items"].append(acc_fn(y_pred, y_batch))
                         
-                        del x_batch, y_batch, y_pred, loss
+                        del x_batch, y_batch, y_pred
+                    
+                    else:
+                        loss = forward(model, batch)
+                    
+                    # Backward
+                    loss.backward()
+                    optimizer.step()
+                    
+                    # Add status
+                    status["pos"] += batch_len
+                    status["train_count"] += batch_len
+                    status["train_loss_items"].append( loss.item() )
+                    
+                    # Clear cache
+                    del loss
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    
+                    # Print progress
+                    if progress:
+                        s = model.get_iter_string("train", params, status)
+                        print ("\r" + s, end="")
+                    
+                    call_callback("on_train_iter", params, status)
+            
+            call_callback("on_train", params, status)
+            
+            if val_loader is not None and do_val != False:
+                
+                # Testing mode
+                model.eval()
+                
+                with torch.no_grad():
 
+                    for batch in val_loader:
+                        
+                        batch_len = len(batch["x"][0]) \
+                            if isinstance(batch["x"], tuple) or isinstance(batch["x"], list) \
+                            else len(batch["x"])
+                        
+                        # Forward
+                        if forward is None:
+                            
+                            # data to device
+                            if batch_transform:
+                                batch = batch_transform(batch)
+                            
+                            x_batch = batch["x"].to(device)
+                            y_batch = batch["y"].to(device)
+                            
+                            y_pred = module(x_batch)
+                            loss = loss_fn(y_pred, y_batch)
+                            
+                            # Calc accuracy
+                            if acc_fn is not None:
+                                status["val_acc_items"].append(acc_fn(y_pred, y_batch))
+                            
+                            del x_batch, y_batch, y_pred
+                            
+                        else:
+                            loss = forward(model, batch)
+                        
+                        # Add status
+                        status["pos"] += batch_len
+                        status["val_count"] += batch_len
+                        status["val_loss_items"].append( loss.item() )
+                        
+                        # Clear cache
+                        del loss
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                         
-                        pos += batch_len
-                        iter_value = round(pos / total_count * 100)
-                        if val_acc_val > 0:
-                            print(f"\rEpoch: {epoch}, {iter_value}%, acc: {val_acc_val}%", end="")
-                        else:
-                            print(f"\rEpoch: {epoch}, {iter_value}%", end="")
+                        # Print progress
+                        if progress:
+                            s = model.get_iter_string("val", params, status)
+                            print ("\r" + s, end="")
+                        
+                        call_callback("on_val_iter", params, status)
+            
+            call_callback("on_val", params, status)
             
             
             # Add metricks
             time_end = time.time()
             t = round(time_end - time_start)
             
-            model.epoch = epoch
-            model.add_epoch(
-                train_acc = train_acc,
-                train_count = train_count,
-                train_batch_iter = len(train_loss),
-                train_loss = sum(train_loss),
-                val_acc = val_acc,
-                val_count = val_count,
-                val_batch_iter = len(val_loss),
-                val_loss = sum(val_loss),
-                t = t,
-            )
+            status["t"] = t
+            status["time_end"] = time_end
             
-            if one_line:
-                print( "\r" + model.get_epoch_string(epoch), end="" )
-            else:
-                print( model.get_epoch_string(epoch) )
+            if scheduler is not None:
+                scheduler.step(status["val_batch_sum"])
+            
+            model.add_epoch(**status)
+            
+            if progress:
+                if one_line:
+                    print( "\r" + model.get_epoch_string(model.epoch), end="" )
+                else:
+                    print( model.get_epoch_string(model.epoch) )
             
             if save_model:
                 model.save_model()
@@ -1013,16 +1043,15 @@ def fit(
             
             model.save_history()
             
-            if on_end_epoch is not None:
-                flag = on_end_epoch(model)
-                if flag == True:
-                    break
+            call_callback("on_end_epoch", params, status)
         
         if one_line:
             print ("")
         
         print ("Ok")
-
+        
+        call_callback("on_end", params)
+        
     except KeyboardInterrupt:
         
         print ("")
