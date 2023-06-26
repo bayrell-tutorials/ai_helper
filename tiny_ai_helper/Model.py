@@ -799,7 +799,7 @@ class Model:
         return ", ".join(msg)
     
     
-    def get_iter_string(self, kind, params, status):
+    def get_progress_string(self, kind, params, status):
         
         epoch = status["epoch"]
         train_count = status["train_count"]

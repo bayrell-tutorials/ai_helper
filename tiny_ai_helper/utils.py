@@ -949,8 +949,7 @@ def fit(
                     
                     # Print progress
                     if progress:
-                        s = model.get_iter_string("train", params, status)
-                        print ("\r" + s, end="")
+                        print ("\r" + model.get_progress_string("train", params, status), end="")
                     
                     call_callback("on_train_iter", params, status)
             
@@ -1003,8 +1002,7 @@ def fit(
                         
                         # Print progress
                         if progress:
-                            s = model.get_iter_string("val", params, status)
-                            print ("\r" + s, end="")
+                            print ("\r" + model.get_progress_string("val", params, status), end="")
                         
                         call_callback("on_val_iter", params, status)
             
