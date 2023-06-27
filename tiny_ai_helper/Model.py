@@ -746,7 +746,7 @@ class Model:
             if val_count > 0:
                 h["val_acc"] = sum(h["val_acc_items"]) / val_count
         
-        if h["train_acc"] is not None and h["val_acc"] is not None:
+        if not(h["train_acc"] is None) and not(h["val_acc"] is None):
             h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
         
         epoch = h["epoch"]
@@ -771,24 +771,24 @@ class Model:
         msg = []
         msg.append(f'\rEpoch: {epoch}')
         
-        if train_acc is not None:
+        if not(train_acc is None):
             train_acc = round(train_acc * 10000) / 100
             msg.append(f'train_acc: {train_acc}%')
         
-        if val_acc is not None:
+        if not(val_acc is None):
             val_acc = round(val_acc * 10000) / 100
             msg.append(f'val_acc: {val_acc}%')
         
-        if "rel" in res and res["rel"] is not None:
+        if "rel" in res and not(res["rel"] is None):
             acc_rel = round(res["rel"] * 1000) / 1000
             msg.append(f'rel: {acc_rel}')
         
-        if train_loss is not None:
+        if not(train_loss is None):
             f = "{:."+str(self.loss_precision)+"f}"
             train_loss = f.format(train_loss)
             msg.append(f'train_loss: {train_loss}')
         
-        if val_loss is not None:
+        if not(val_loss is None):
             f = "{:."+str(self.loss_precision)+"f}"
             val_loss = f.format(val_loss)
             msg.append(f'val_loss: {val_loss}')
