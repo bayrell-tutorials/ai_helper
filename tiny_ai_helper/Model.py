@@ -724,10 +724,10 @@ class Model:
         
         elif self.loss_reduction == "sum":
             
-            if train_count > 0:
+            if len(h["train_loss_items"]) > 0 and train_count > 0:
                 h["train_loss"] = sum(h["train_loss_items"]) / train_count
             
-            if val_count > 0:
+            if len(h["val_loss_items"]) > 0 and val_count > 0:
                 h["val_loss"] = sum(h["val_loss_items"]) / val_count
         
         if self.acc_reduction == "mean":
@@ -740,10 +740,10 @@ class Model:
         
         elif self.acc_reduction == "sum":
             
-            if train_count > 0:
+            if len(h["train_acc_items"]) > 0 and train_count > 0:
                 h["train_acc"] = sum(h["train_acc_items"]) / train_count
             
-            if val_count > 0:
+            if len(h["val_acc_items"]) > 0 and val_count > 0:
                 h["val_acc"] = sum(h["val_acc_items"]) / val_count
         
         if not(h["train_acc"] is None) and not(h["val_acc"] is None):
