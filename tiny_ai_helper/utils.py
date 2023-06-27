@@ -911,6 +911,8 @@ def fit(
                     # Set parameter gradients to zero
                     optimizer.zero_grad()
                     
+                    acc_value = None
+                    
                     # Forward
                     if forward is None:
                         
@@ -926,12 +928,12 @@ def fit(
                         
                         # Calc accuracy
                         if acc_fn is not None:
-                            status["train_acc_items"].append(acc_fn(y_pred, y_batch))
+                            acc_value = acc_fn(y_pred, y_batch)
                         
                         del x_batch, y_batch, y_pred
                     
                     else:
-                        loss = forward(model, batch)
+                        loss, acc_value = forward(model, batch)
                     
                     # Backward
                     loss.backward()
@@ -941,6 +943,9 @@ def fit(
                     status["pos"] += batch_len
                     status["train_count"] += batch_len
                     status["train_loss_items"].append( loss.item() )
+                    
+                    if acc_value is not None:
+                        status["train_acc_items"].append( acc_value )
                     
                     # Clear cache
                     del loss
@@ -968,6 +973,8 @@ def fit(
                             if isinstance(batch["x"], tuple) or isinstance(batch["x"], list) \
                             else len(batch["x"])
                         
+                        acc_value = None
+                        
                         # Forward
                         if forward is None:
                             
@@ -983,17 +990,20 @@ def fit(
                             
                             # Calc accuracy
                             if acc_fn is not None:
-                                status["val_acc_items"].append(acc_fn(y_pred, y_batch))
+                                acc_value = acc_fn(y_pred, y_batch)
                             
                             del x_batch, y_batch, y_pred
                             
                         else:
-                            loss = forward(model, batch)
+                            loss, acc_value = forward(model, batch)
                         
                         # Add status
                         status["pos"] += batch_len
                         status["val_count"] += batch_len
                         status["val_loss_items"].append( loss.item() )
+                        
+                        if acc_value is not None:
+                            status["val_acc_items"].append( acc_value )
                         
                         # Clear cache
                         del loss
