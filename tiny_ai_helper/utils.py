@@ -870,6 +870,8 @@ def fit(
     
     batch_transform = getattr(module, "batch_transform", None)
     
+    if isinstance(loss_fn, nn.Module):
+        loss_fn = loss_fn.to(model.device)
     
     def call_callback(name, params, status=None):
         if callbacks is not None:
