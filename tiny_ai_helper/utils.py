@@ -1029,7 +1029,7 @@ def fit(
             status["time_end"] = time_end
             
             if scheduler is not None:
-                scheduler.step(status["val_batch_sum"])
+                scheduler.step(sum(status["val_loss_items"]))
             
             model.add_epoch(**status)
             
