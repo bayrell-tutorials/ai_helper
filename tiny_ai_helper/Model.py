@@ -33,7 +33,7 @@ class Model:
         self.epoch = 0
         self.history = {}
         self.min_lr = 1e-5
-        self.max_best_models = 10
+        self.max_best_models = 50
         self.model_path = ""
         self.repository_path = ""
         self.set_repository_path("model")

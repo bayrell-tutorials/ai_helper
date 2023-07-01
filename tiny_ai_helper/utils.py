@@ -954,11 +954,11 @@ def fit(
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
+                    call_callback("on_train_iter", params, status)
+                    
                     # Print progress
                     if progress:
                         print ("\r" + model.get_progress_string("train", params, status), end="")
-                    
-                    call_callback("on_train_iter", params, status)
             
             call_callback("on_train", params, status)
             
@@ -1012,11 +1012,11 @@ def fit(
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                         
+                        call_callback("on_val_iter", params, status)
+                        
                         # Print progress
                         if progress:
                             print ("\r" + model.get_progress_string("val", params, status), end="")
-                        
-                        call_callback("on_val_iter", params, status)
             
             call_callback("on_val", params, status)
             
@@ -1030,6 +1030,8 @@ def fit(
             
             if scheduler is not None:
                 scheduler.step(sum(status["val_loss_items"]))
+            
+            call_callback("on_end_epoch", params, status)
             
             model.add_epoch(**status)
             
@@ -1052,8 +1054,6 @@ def fit(
                 model.save_the_best_models()
             
             model.save_history()
-            
-            call_callback("on_end_epoch", params, status)
         
         if one_line:
             print ("")
