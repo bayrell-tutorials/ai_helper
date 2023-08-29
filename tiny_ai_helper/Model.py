@@ -24,7 +24,6 @@ class Model:
         self.scheduler = None
         self.loss = None
         self.loss_reduction = 'mean'
-        self.loss_precision = 9
         self.best_metrics = ["epoch"]
         self.acc_fn = None
         self.acc_reduction = 'sum'
@@ -33,10 +32,31 @@ class Model:
         self.epoch = 0
         self.history = {}
         self.min_lr = 1e-5
-        self.max_best_models = 50
         self.model_path = ""
         self.repository_path = ""
         self.set_repository_path("model")
+        
+        self.progress_string_train = ", ".join([
+            "Epoch: {epoch}",
+            "{iter_value}%",
+            "train_acc: {train_acc_percent:.2f}%",
+        ])
+        self.progress_string_val = ", ".join([
+            "Epoch: {epoch}",
+            "{iter_value}%",
+            "val_acc: {val_acc_percent:.2f}%",
+        ])
+        
+        self.epoch_string = ", ".join([
+            "Epoch: {epoch}",
+            "train_acc: {train_acc_percent:.2f}%",
+            "val_acc: {val_acc_percent:.2f}%",
+            "rel: {rel:.3f}",
+            "train_loss: {train_loss:.7f}",
+            "val_loss: {val_loss:.7f}",
+            "lr: {lr_str}%",
+            "t: {t}s",
+        ])
     
     
     def set_module(self, module):
@@ -71,6 +91,10 @@ class Model:
     
     def set_path(self, model_path):
         self.model_path = model_path
+        return self
+    
+    def set_best_metrics(self, best_metrics):
+        self.best_metrics = best_metrics
         return self
     
     def set_repository_path(self, repository_path):
@@ -229,6 +253,10 @@ class Model:
         Save weights
         """
         
+        # Create folder
+        if not os.path.isdir(self.model_path):
+            os.makedirs(self.model_path)
+        
         if file_path is None:
             file_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
             file_path = os.path.join(self.model_path, file_name)
@@ -244,6 +272,10 @@ class Model:
         Save weights
         """
         
+        # Create folder
+        if not os.path.isdir(self.model_path):
+            os.makedirs(self.model_path)
+        
         if file_path is None:
             file_name = self.get_full_name() + ".pth"
             file_path = os.path.join(self.model_path, file_name)
@@ -258,6 +290,10 @@ class Model:
         """
         Save train epoch
         """
+        
+        # Create folder
+        if not os.path.isdir(self.model_path):
+            os.makedirs(self.model_path)
         
         file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
         file_path = os.path.join(self.model_path, file_name)
@@ -308,7 +344,7 @@ class Model:
         Save history to json
         """
         
-        best_epoch = self.get_the_best_epoch()
+        best_epoch = self.get_the_best_epoch(self.best_metrics)
         file_name = os.path.join(self.model_path, "history.json")
         obj = {
             "epoch": self.epoch,
@@ -549,7 +585,7 @@ class Model:
         return self.get_the_best_epochs_indexes(epoch_count, best_metrics)
     
     
-    def save_the_best_models(self):
+    def save_the_best_models(self, max_best_models=10):
         
         """
         Save the best models
@@ -574,11 +610,9 @@ class Model:
             return file_type, epoch_index
         
         
-        epoch_count = self.max_best_models
-        
-        if self.epoch > 0 and epoch_count > 0 and os.path.isdir(self.model_path):
+        if self.epoch > 0 and max_best_models > 0 and os.path.isdir(self.model_path):
             
-            epoch_indexes = self.get_the_best_epochs_indexes(epoch_count)
+            epoch_indexes = self.get_the_best_epochs_indexes(max_best_models)
             epoch_indexes.append( self.epoch )
             
             files = list_files( self.model_path )
@@ -673,179 +707,112 @@ class Model:
             "epoch": self.epoch,
             "time_start": 0,
             "time_end": 0,
-            "train_acc": None,
+            "train_acc": 0,
             "train_acc_items": [],
-            "train_acc_sum": 0,
             "train_count": 0,
-            "train_loss": None,
+            "train_loss": 0,
             "train_loss_items": [],
             "train_batch_iter": 0,
-            "val_acc": None,
+            "val_acc": 0,
             "val_acc_items": [],
-            "val_acc_sum": 0,
             "val_count": 0,
-            "val_loss": None,
+            "val_loss": 0,
             "val_loss_items": [],
             "val_batch_iter": 0,
+            "iter_value": 0,
             "total_count": 0,
             "pos": 0,
             "t": 0,
         }
         
-        if self.acc_fn is None:
-            status["train_acc_sum"] = None
-            status["val_acc_sum"] = None
-        
         return status
     
-    def add_epoch(self, **h):
     
-        lr = []
-        for param_group in self.optimizer.param_groups:
-            lr.append( round(param_group['lr'], 7) )
-        
-        h["train_loss"] = None
-        h["train_acc"] = None
-        h["val_loss"] = None
-        h["val_acc"] = None
-        h["rel"] = None
-        h["lr"] = lr
-        
-        train_count = h["train_count"]
-        val_count = h["val_count"]
-        
-        if self.loss_reduction == "mean":
-            
-            if len(h["train_loss_items"]) > 0:
-                h["train_loss"] = sum(h["train_loss_items"]) / len(h["train_loss_items"])
-            
-            if len(h["val_loss_items"]) > 0:
-                h["val_loss"] = sum(h["val_loss_items"]) / len(h["val_loss_items"])
-        
-        elif self.loss_reduction == "sum":
-            
-            if len(h["train_loss_items"]) > 0 and train_count > 0:
-                h["train_loss"] = sum(h["train_loss_items"]) / train_count
-            
-            if len(h["val_loss_items"]) > 0 and val_count > 0:
-                h["val_loss"] = sum(h["val_loss_items"]) / val_count
-        
-        if self.acc_reduction == "mean":
-            
-            if len(h["train_acc_items"]) > 0:
-                h["train_acc"] = sum(h["train_acc_items"]) / len(h["train_acc_items"])
-            
-            if len(h["val_acc_items"]) > 0:
-                h["val_acc"] = sum(h["val_acc_items"]) / len(h["val_acc_items"])
-        
-        elif self.acc_reduction == "sum":
-            
-            if len(h["train_acc_items"]) > 0 and train_count > 0:
-                h["train_acc"] = sum(h["train_acc_items"]) / train_count
-            
-            if len(h["val_acc_items"]) > 0 and val_count > 0:
-                h["val_acc"] = sum(h["val_acc_items"]) / val_count
-        
-        if not(h["train_acc"] is None) and not(h["val_acc"] is None):
-            h["rel"] = (h["train_acc"] / h["val_acc"]) if h["val_acc"] > 0 else 0
-        
-        epoch = h["epoch"]
-        self.history[epoch] = h.copy()
-    
-    
-    def get_epoch_string(self, epoch):
-        
-        res = self.history[epoch]
-        
-        # Get epoch status
-        t = res["t"] if "t" in res else 0
-        train_acc = res["train_acc"] if "train_acc" in res else 0
-        train_loss = res["train_loss"] if "train_loss" in res else 0
-        train_count = res["train_count"] if "train_count" in res else 0
-        val_acc = res["val_acc"] if "val_acc" in res else 0
-        val_loss = res["val_loss"] if "val_loss" in res else 0
-        val_count = res["val_count"] if "val_count" in res else 0
-        res_lr = res["lr"] if "lr" in res else []
-        res_lr_str = str(res_lr)
-        
-        msg = []
-        msg.append(f'\rEpoch: {epoch}')
-        
-        if not(train_acc is None):
-            train_acc = round(train_acc * 10000) / 100
-            msg.append(f'train_acc: {train_acc}%')
-        
-        if not(val_acc is None):
-            val_acc = round(val_acc * 10000) / 100
-            msg.append(f'val_acc: {val_acc}%')
-        
-        if "rel" in res and not(res["rel"] is None):
-            acc_rel = round(res["rel"] * 1000) / 1000
-            msg.append(f'rel: {acc_rel}')
-        
-        if not(train_loss is None):
-            f = "{:."+str(self.loss_precision)+"f}"
-            train_loss = f.format(train_loss)
-            msg.append(f'train_loss: {train_loss}')
-        
-        if not(val_loss is None):
-            f = "{:."+str(self.loss_precision)+"f}"
-            val_loss = f.format(val_loss)
-            msg.append(f'val_loss: {val_loss}')
-        
-        #msg.append(f'lr: {res_lr_str}')
-        msg.append(f't: {t}s')
-        
-        return ", ".join(msg)
-    
-    
-    def get_progress_string(self, kind, params, status):
-        
+    def add_epoch(self, status, **params):
         epoch = status["epoch"]
+        self.history[epoch] = status.copy()
+    
+    
+    def on_train_iter(self, status, **params):
+        
         train_count = status["train_count"]
         train_acc_items = status["train_acc_items"]
         train_loss_items = status["train_loss_items"]
+        
+        if self.loss_reduction == "mean":
+            if len(train_loss_items) > 0:
+                status["train_loss"] = sum(train_loss_items) / len(train_loss_items)
+        
+        elif self.loss_reduction == "sum":
+            if len(train_loss_items) > 0 and train_count > 0:
+                status["train_loss"] = sum(train_loss_items) / train_count
+        
+        if self.acc_reduction == "mean":
+            if len(train_acc_items) > 0:
+                status["train_acc"] = sum(train_acc_items) / len(train_acc_items)
+                status["train_acc_percent"] = status["train_acc"] * 100
+        
+        elif self.acc_reduction == "sum":
+            if len(train_acc_items) > 0 and train_count > 0:
+                status["train_acc"] = sum(train_acc_items) / train_count
+                status["train_acc_percent"] = status["train_acc"] * 100
+        
+        if status["total_count"] > 0:
+            status["iter_value"] = (status["pos"] / status["total_count"]) * 100
+        
+    
+    def on_val_iter(self, status, **params):
+        
         val_count = status["val_count"]
         val_acc_items = status["val_acc_items"]
         val_loss_items = status["val_loss_items"]
         
-        iter_value = 0
-        if status["total_count"] > 0:
-            iter_value = status["pos"] / status["total_count"]
-        iter_value = round(iter_value * 100)
+        if self.loss_reduction == "mean":
+            if len(val_loss_items) > 0:
+                status["val_loss"] = sum(val_loss_items) / len(val_loss_items)
         
-        if kind == "train":
-            
-            train_acc_val = 0
-            if len(train_acc_items) > 0:
-                train_acc_sum = sum(train_acc_items)
-                if self.acc_reduction == "sum":
-                    if train_count > 0:
-                        train_acc_val = round(train_acc_sum / train_count * 10000) / 100
-                else:
-                    train_acc_val = round(train_acc_sum / len(train_acc_items) * 10000) / 100
-            
-            if train_acc_val > 0:
-                return f"Epoch: {epoch}, {iter_value}%, acc: {train_acc_val}%"
-            else:
-                return f"Epoch: {epoch}, {iter_value}%"
+        elif self.loss_reduction == "sum":
+            if len(val_loss_items) > 0 and val_count > 0:
+                status["val_loss"] = sum(val_loss_items) / val_count
         
-        if kind == "val":
-            
-            val_acc_val = 0
+        if self.acc_reduction == "mean":
             if len(val_acc_items) > 0:
-                val_acc_sum = sum(val_acc_items)
-                if self.acc_reduction == "sum":
-                    if val_count > 0:
-                        val_acc_val = round(val_acc_sum / val_count * 10000) / 100
-                else:
-                    val_acc_val = round(val_acc_sum / len(val_acc_items) * 10000) / 100
-            
-            if val_acc_val > 0:
-                return f"Epoch: {epoch}, {iter_value}%, acc: {val_acc_val}%"
-            else:
-                return f"Epoch: {epoch}, {iter_value}%"
+                status["val_acc"] = sum(val_acc_items) / len(val_acc_items)
+                status["val_acc_percent"] = status["val_acc"] * 100
+        
+        elif self.acc_reduction == "sum":
+            if len(val_acc_items) > 0 and val_count > 0:
+                status["val_acc"] = sum(val_acc_items) / val_count
+                status["val_acc_percent"] = status["val_acc"] * 100
+        
+        if status["total_count"] > 0:
+            status["iter_value"] = (status["pos"] / status["total_count"]) * 100
+        
     
+    def on_end_epoch(self, status, **params):
+        
+        lr = []
+        for param_group in self.optimizer.param_groups:
+            lr.append( param_group['lr'] )
+        
+        if not(status["train_acc"] is None) and not(status["val_acc"] is None):
+            status["rel"] = (status["train_acc"] / status["val_acc"]) if status["val_acc"] > 0 else 0
+        
+        status["lr"] = lr
+        status["lr_str"] = "[" + ",".join([ str(round(item,7)) for item in lr ]) + "]"
+    
+    
+    def get_epoch_string(self, epoch):
+        status = self.history[epoch]
+        return self.epoch_string.format(**status)
+        
+    
+    def get_progress_string(self, kind, status, **params):
+        if kind == "train":
+            return self.progress_string_train.format(**status)
+        if kind == "val":
+            return self.progress_string_val.format(**status)
+        
     
     def get_train_loss(self, epoch=None):
         if epoch is None:

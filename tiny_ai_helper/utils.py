@@ -47,7 +47,7 @@ def append_tensor(res, t):
     return res
 
 
-def make_index(arr, file_name=None):
+def make_index(arr, field_name=None):
     
     """
     Make index from arr. Returns dict of positions values in arr
@@ -56,8 +56,8 @@ def make_index(arr, file_name=None):
     res = {}
     for index in range(len(arr)):
         value = arr[index]
-        if file_name is not None:
-            value = value[file_name]
+        if field_name is not None:
+            value = value[field_name]
         res[value] = index
     
     return res
@@ -816,20 +816,22 @@ def compile(module):
 def fit(
     model, train_dataset=None, val_dataset=None,
     batch_size=64, epochs=10,
-    save_model=True, save_train=True, save_weights=True,
-    progress=True, one_line=False, callbacks=None, forward=None,
-    do_train=True, do_val=True,
+    progress=True, progress_iter=True, one_line=False,
+    callbacks=None, do_train=True, do_val=True,
     **params
 ):
+    if callbacks is None:
+        callbacks = []
+    
+    callbacks.insert(0, model.module)
+    callbacks.insert(0, model)
     
     params["model"] = model
     params["train_dataset"] = train_dataset
     params["val_dataset"] = val_dataset
     params["batch_size"] = batch_size
     params["epochs"] = epochs
-    params["save_model"] = save_model
-    params["save_train"] = save_train
-    params["save_weights"] = save_weights
+    params["status"] = None
     params["progress"] = progress
     params["one_line"] = one_line
     params["callbacks"] = callbacks
@@ -873,13 +875,13 @@ def fit(
     if isinstance(loss_fn, nn.Module):
         loss_fn = loss_fn.to(model.device)
     
-    def call_callback(name, params, status=None):
+    def call_callback(name, params):
         if callbacks is not None:
             for callback in callbacks:
                 if hasattr(callback, name):
                     f = getattr(callback, name, None)
                     if f is not None:
-                        f(params=params, status=status)
+                        f(**params)
     
     
     call_callback("on_start", params)
@@ -891,13 +893,13 @@ def fit(
             model.epoch = model.epoch + 1
             time_start = time.time()
             
-            status = model.get_epoch_train_status()
+            params["status"] = model.get_epoch_train_status()
             
-            status["total_count"] = len(train_dataset)
+            params["status"]["total_count"] = len(train_dataset)
             if val_dataset is not None:
-                status["total_count"] += len(val_dataset)
+                params["status"]["total_count"] += len(val_dataset)
             
-            call_callback("on_start_epoch", params, status)
+            call_callback("on_start_epoch", params)
             
             if do_train != False:
                 
@@ -915,8 +917,11 @@ def fit(
                     
                     acc_value = None
                     
-                    # Forward
-                    if forward is None:
+                    # Forward train
+                    if hasattr(module, "step_train"):
+                        loss, acc_value = module.step_train(model, batch)
+                    
+                    else:
                         
                         # Data to device
                         if batch_transform:
@@ -934,33 +939,30 @@ def fit(
                         
                         del x_batch, y_batch, y_pred
                     
-                    else:
-                        loss, acc_value = forward(model, batch)
-                    
                     # Backward
                     loss.backward()
                     optimizer.step()
                     
                     # Add status
-                    status["pos"] += batch_len
-                    status["train_count"] += batch_len
-                    status["train_loss_items"].append( loss.item() )
+                    params["status"]["pos"] += batch_len
+                    params["status"]["train_count"] += batch_len
+                    params["status"]["train_loss_items"].append( loss.item() )
                     
                     if acc_value is not None:
-                        status["train_acc_items"].append( acc_value )
+                        params["status"]["train_acc_items"].append( acc_value )
                     
                     # Clear cache
                     del loss
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
-                    call_callback("on_train_iter", params, status)
+                    call_callback("on_train_iter", params)
                     
                     # Print progress
-                    if progress:
-                        print ("\r" + model.get_progress_string("train", params, status), end="")
+                    if progress and progress_iter:
+                        print ("\r" + model.get_progress_string("train", **params), end="")
             
-            call_callback("on_train", params, status)
+            call_callback("on_train", params)
             
             if val_loader is not None and do_val != False:
                 
@@ -978,7 +980,10 @@ def fit(
                         acc_value = None
                         
                         # Forward
-                        if forward is None:
+                        if hasattr(module, "step_val"):
+                            loss, acc_value =  module.step_val(model, batch)
+                            
+                        else:
                             
                             # data to device
                             if batch_transform:
@@ -995,45 +1000,42 @@ def fit(
                                 acc_value = acc_fn(y_pred, y_batch)
                             
                             del x_batch, y_batch, y_pred
-                            
-                        else:
-                            loss, acc_value = forward(model, batch)
                         
                         # Add status
-                        status["pos"] += batch_len
-                        status["val_count"] += batch_len
-                        status["val_loss_items"].append( loss.item() )
+                        params["status"]["pos"] += batch_len
+                        params["status"]["val_count"] += batch_len
+                        params["status"]["val_loss_items"].append( loss.item() )
                         
                         if acc_value is not None:
-                            status["val_acc_items"].append( acc_value )
+                            params["status"]["val_acc_items"].append( acc_value )
                         
                         # Clear cache
                         del loss
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                         
-                        call_callback("on_val_iter", params, status)
+                        call_callback("on_val_iter", params)
                         
                         # Print progress
-                        if progress:
-                            print ("\r" + model.get_progress_string("val", params, status), end="")
+                        if progress and progress_iter:
+                            print ("\r" + model.get_progress_string("val", **params), end="")
             
-            call_callback("on_val", params, status)
-            
+            call_callback("on_val", params)
+            call_callback("on_next_epoch", params)
             
             # Add metricks
             time_end = time.time()
             t = round(time_end - time_start)
             
-            status["t"] = t
-            status["time_end"] = time_end
+            params["status"]["t"] = t
+            params["status"]["time_end"] = time_end
             
             if scheduler is not None:
-                scheduler.step(sum(status["val_loss_items"]))
+                module.step_scheduler(**params)
             
-            call_callback("on_end_epoch", params, status)
+            call_callback("on_end_epoch", params)
             
-            model.add_epoch(**status)
+            model.add_epoch(**params)
             
             if progress:
                 if one_line:
@@ -1041,20 +1043,9 @@ def fit(
                 else:
                     print( model.get_epoch_string(model.epoch) )
             
-            if save_model:
-                model.save_model()
+            if hasattr(module, "step_save"):
+                module.step_save(**params)
             
-            if save_train:
-                model.save_train_epoch()
-            
-            if save_weights:
-                model.save_weights_epoch()
-            
-            if save_train or save_weights:
-                model.save_the_best_models()
-            
-            model.save_history()
-        
         if one_line:
             print ("")
         
