@@ -35,28 +35,6 @@ class Model:
         self.model_path = ""
         self.repository_path = ""
         self.set_repository_path("model")
-        
-        self.progress_string_train = ", ".join([
-            "Epoch: {epoch}",
-            "{iter_value}%",
-            "train_acc: {train_acc_percent:.2f}%",
-        ])
-        self.progress_string_val = ", ".join([
-            "Epoch: {epoch}",
-            "{iter_value}%",
-            "val_acc: {val_acc_percent:.2f}%",
-        ])
-        
-        self.epoch_string = ", ".join([
-            "Epoch: {epoch}",
-            "train_acc: {train_acc_percent:.2f}%",
-            "val_acc: {val_acc_percent:.2f}%",
-            "rel: {rel:.3f}",
-            "train_loss: {train_loss:.7f}",
-            "val_loss: {val_loss:.7f}",
-            "lr: {lr_str}%",
-            "t: {t}s",
-        ])
     
     
     def set_module(self, module):
@@ -99,10 +77,10 @@ class Model:
     
     def set_repository_path(self, repository_path):
         self.repository_path = repository_path
-        self.model_path = os.path.join(repository_path, self.get_full_name())
+        self.model_path = os.path.join(repository_path, self.get_model_name())
         return self
     
-    def get_full_name(self):
+    def get_model_name(self):
         if self.prefix_name != "":
             return self.name + "_" + self.prefix_name
         return self.name
@@ -186,11 +164,11 @@ class Model:
         Load epoch
         """
         
-        file_name = self.get_full_name() + "-" + str(epoch) + ".data"
+        file_name = self.get_model_name() + "-" + str(epoch) + ".data"
         file_path = os.path.join(self.model_path, file_name)
         
         if not os.path.exists(file_path):
-            file_name = self.get_full_name() + "-" + str(epoch) + ".pth"
+            file_name = self.get_model_name() + "-" + str(epoch) + ".pth"
             file_path = os.path.join(self.model_path, file_name)
         
         self.load_model(file_path, full_path=True)
@@ -204,11 +182,11 @@ class Model:
         Load last model
         """
         
-        file_name = self.get_full_name() + ".data"
+        file_name = self.get_model_name() + ".data"
         file_path = os.path.join(self.model_path, file_name)
         
         if not os.path.exists(file_path):
-            file_name = self.get_full_name() + ".pth"
+            file_name = self.get_model_name() + ".pth"
             file_path = os.path.join(self.model_path, file_name)
         
         if os.path.exists(file_path):
@@ -258,7 +236,7 @@ class Model:
             os.makedirs(self.model_path)
         
         if file_path is None:
-            file_name = self.get_full_name() + "-" + str(self.epoch) + ".pth"
+            file_name = self.get_model_name() + "-" + str(self.epoch) + ".pth"
             file_path = os.path.join(self.model_path, file_name)
         
         torch.save(self.module.state_dict(), file_path)
@@ -277,7 +255,7 @@ class Model:
             os.makedirs(self.model_path)
         
         if file_path is None:
-            file_name = self.get_full_name() + ".pth"
+            file_name = self.get_model_name() + ".pth"
             file_path = os.path.join(self.model_path, file_name)
         
         torch.save(self.module.state_dict(), file_path)
@@ -295,7 +273,7 @@ class Model:
         if not os.path.isdir(self.model_path):
             os.makedirs(self.model_path)
         
-        file_name = self.get_full_name() + "-" + str(self.epoch) + ".data"
+        file_name = self.get_model_name() + "-" + str(self.epoch) + ".data"
         file_path = os.path.join(self.model_path, file_name)
         self.save_model(file_path)
         
@@ -310,7 +288,7 @@ class Model:
         
         # Get metrics
         save_metrics = {}
-        save_metrics["name"] = self.get_full_name()
+        save_metrics["name"] = self.get_model_name()
         save_metrics["epoch"] = self.epoch
         save_metrics["history"] = self.history.copy()
         save_metrics["module"] = self.module.state_dict()
@@ -330,7 +308,7 @@ class Model:
         
         # Save model to file
         if file_path is None:
-            model_file_name = self.get_full_name() + ".data"
+            model_file_name = self.get_model_name() + ".data"
             file_path = os.path.join(self.model_path, model_file_name)
         
         torch.save(save_metrics, file_path)
@@ -597,7 +575,7 @@ class Model:
             
             file_type = ""
             epoch_index = 0
-            model_name = self.get_full_name()
+            model_name = self.get_model_name()
             
             result = re.match(r'^'+model_name+'-(?P<id>[0-9]+)\.data$', file_name)
             if result:
@@ -636,7 +614,7 @@ class Model:
         
         summary(self.module, x,
             device=self.device,
-            model_name=self.get_full_name()
+            model_name=self.get_model_name()
         )
     
         
@@ -867,7 +845,7 @@ class Model:
             from google.colab import drive
             drive.mount('/content/drive')
         
-        dest_path = os.path.join(repository_path, self.get_full_name())
+        dest_path = os.path.join(repository_path, self.get_model_name())
         if not os.path.exists(dest_path):
             os.makedirs(dest_path)
         
@@ -877,8 +855,8 @@ class Model:
                 dest_file_path = os.path.join(dest_path, file_name)
                 shutil.copy(src_file_path, dest_file_path)
 
-        upload(self.get_full_name() + "-" + str(epoch) + ".data")
-        upload(self.get_full_name() + "-" + str(epoch) + ".pth")
+        upload(self.get_model_name() + "-" + str(epoch) + ".data")
+        upload(self.get_model_name() + "-" + str(epoch) + ".pth")
     
     
     def download_from_google_drive(self, epoch, repository_path):
@@ -889,7 +867,7 @@ class Model:
             from google.colab import drive
             drive.mount('/content/drive')
         
-        src_path = os.path.join(repository_path, self.get_full_name())
+        src_path = os.path.join(repository_path, self.get_model_name())
         if not os.path.exists(self.model_path):
             os.makedirs(self.model_path)
         
@@ -899,8 +877,8 @@ class Model:
                 dest_file_path = os.path.join(self.model_path, file_name)
                 shutil.copy(src_file_path, dest_file_path)
 
-        download(self.get_full_name() + "-" + str(epoch) + ".data")
-        download(self.get_full_name() + "-" + str(epoch) + ".pth")
+        download(self.get_model_name() + "-" + str(epoch) + ".data")
+        download(self.get_model_name() + "-" + str(epoch) + ".pth")
     
     
     def upload_history_to_google_drive(self, repository_path):
@@ -914,7 +892,7 @@ class Model:
         if not os.path.exists(repository_path):
             os.makedirs(repository_path)
         
-        dest_path = os.path.join(repository_path, self.get_full_name())
+        dest_path = os.path.join(repository_path, self.get_model_name())
         if not os.path.exists(dest_path):
             os.makedirs(dest_path)
         
@@ -934,7 +912,110 @@ class Model:
         if not os.path.exists(self.model_path):
             os.makedirs(self.model_path)
         
-        src_path = os.path.join(repository_path, self.get_full_name())
+        src_path = os.path.join(repository_path, self.get_model_name())
         src_file_path = os.path.join(src_path, "history.json")
         dest_file_path = os.path.join(self.model_path, "history.json")
         shutil.copy(src_file_path, dest_file_path)
+
+
+class SaveCallback():
+    
+    def __init__(self, count=20, save_weights=True, save_train=True, save_last=False):
+        self.count = count
+        self.save_weights = save_weights
+        self.save_train = save_train
+        self.save_last = save_last
+    
+    def on_end_epoch(self, model, **params):
+        
+        is_save = False
+        
+        if self.save_weights:
+            model.save_train_epoch()
+            is_save = True
+        
+        if self.save_train:
+            model.save_weights_epoch()
+            is_save = True
+        
+        if self.count >= 0:
+            model.save_the_best_models(self.count)
+            is_save = True
+        
+        if self.save_last:
+            model.save_model()
+            is_save = True
+        
+        if is_save:
+            model.save_history()
+
+
+class ProgressCallback():
+    
+    def __init__(self, one_line=False, progress_iter=True, show_lr=True):
+        self.one_line = one_line
+        self.progress_iter = progress_iter
+        
+        self.progress_string_train = ", ".join([
+            "Epoch: {epoch}",
+            "{iter_value:.0f}%",
+            "train_acc: {train_acc_percent:.2f}%",
+        ])
+        self.progress_string_val = ", ".join([
+            "Epoch: {epoch}",
+            "{iter_value:.0f}%",
+            "val_acc: {val_acc_percent:.2f}%",
+        ])
+        
+        self.epoch_string = [
+            "Epoch: {epoch}",
+            "train_acc: {train_acc_percent:.2f}%",
+            "val_acc: {val_acc_percent:.2f}%",
+            "rel: {rel:.3f}",
+            "train_loss: {train_loss:.7f}",
+            "val_loss: {val_loss:.7f}",
+            "lr: {lr_str}" if show_lr else "",
+            "t: {t}s",
+        ]
+        self.epoch_string = list(filter(lambda item: item != "", self.epoch_string))
+        self.epoch_string = ", ".join(self.epoch_string)
+    
+    
+    def get_epoch_string(self, status):
+        return self.epoch_string.format(**status)
+    
+    
+    def get_progress_string(self, kind, status):
+        
+        if kind == "train":
+            return self.progress_string_train.format(**status)
+        
+        if kind == "val":
+            return self.progress_string_val.format(**status)
+    
+    
+    def on_train_iter(self, status, **params):
+        
+        if self.progress_iter:
+            print ("\r" + self.get_progress_string("train", status), end="")
+    
+    
+    def on_val_iter(self, status, **params):
+        
+        if self.progress_iter:
+            print ("\r" + self.get_progress_string("val", status), end="")
+    
+    
+    def on_end_epoch(self, status, **params):
+        
+        if self.one_line:
+            print( "\r" + self.get_epoch_string(status), end="" )
+        else:
+            print( "\r" + self.get_epoch_string(status) )
+    
+    
+    def on_end(self, **params):
+        if self.one_line:
+            print ("")
+        
+        print ("Ok")

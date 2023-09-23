@@ -238,19 +238,23 @@ def get_default_device():
     return device
 
 
-def get_acc_class(batch_predict, batch_y):
+def get_acc_class():
     
-    """
-    Returns class accuracy
-    """
+    def f(batch_predict, batch_y):
+        
+        """
+        Returns class accuracy
+        """
+        
+        if len(batch_y.shape) == 2:
+            batch_y = torch.argmax(batch_y, dim=1)
+        
+        batch_predict = torch.argmax(batch_predict, dim=1)
+        acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
+        
+        return acc
     
-    if len(batch_y.shape) == 2:
-        batch_y = torch.argmax(batch_y, dim=1)
-    
-    batch_predict = torch.argmax(batch_predict, dim=1)
-    acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
-    
-    return acc
+    return f
 
 
 def get_acc_binary(treshold=0.5):
@@ -706,7 +710,7 @@ def summary(module, x, model_name=None, device=None):
         if isinstance(x, torch.utils.data.Dataset):
             loader = torch.utils.data.DataLoader(
                 x,
-                batch_size=2,
+                batch_size=10,
                 drop_last=False,
                 shuffle=False
             )
@@ -816,7 +820,6 @@ def compile(module):
 def fit(
     model, train_dataset=None, val_dataset=None,
     batch_size=64, epochs=10,
-    progress=True, progress_iter=True, one_line=False,
     callbacks=None, do_train=True, do_val=True,
     **params
 ):
@@ -832,12 +835,10 @@ def fit(
     params["batch_size"] = batch_size
     params["epochs"] = epochs
     params["status"] = None
-    params["progress"] = progress
-    params["one_line"] = one_line
     params["callbacks"] = callbacks
     
     device = model.device
-    model_name = model.get_full_name()
+    model_name = model.get_model_name()
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -957,10 +958,6 @@ def fit(
                         torch.cuda.empty_cache()
                     
                     call_callback("on_train_iter", params)
-                    
-                    # Print progress
-                    if progress and progress_iter:
-                        print ("\r" + model.get_progress_string("train", **params), end="")
             
             call_callback("on_train", params)
             
@@ -1015,10 +1012,6 @@ def fit(
                             torch.cuda.empty_cache()
                         
                         call_callback("on_val_iter", params)
-                        
-                        # Print progress
-                        if progress and progress_iter:
-                            print ("\r" + model.get_progress_string("val", **params), end="")
             
             call_callback("on_val", params)
             call_callback("on_next_epoch", params)
@@ -1033,23 +1026,8 @@ def fit(
             if scheduler is not None:
                 module.step_scheduler(**params)
             
-            call_callback("on_end_epoch", params)
-            
             model.add_epoch(**params)
-            
-            if progress:
-                if one_line:
-                    print( "\r" + model.get_epoch_string(model.epoch), end="" )
-                else:
-                    print( model.get_epoch_string(model.epoch) )
-            
-            if hasattr(module, "step_save"):
-                module.step_save(**params)
-            
-        if one_line:
-            print ("")
-        
-        print ("Ok")
+            call_callback("on_end_epoch", params)
         
         call_callback("on_end", params)
         
