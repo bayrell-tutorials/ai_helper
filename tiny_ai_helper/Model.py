@@ -10,7 +10,8 @@ import torch, time, json, math, gc, os
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 from .utils import TransformDataset, list_files, \
-    get_default_device, batch_to, tensor_size, load_json, summary, fit
+    get_default_device, batch_to, tensor_size, \
+    load_json, summary, fit
 
 
 class Model:
@@ -371,16 +372,24 @@ class Model:
         Predict
         """
         
+        batch = {"x":x}
         batch_transform = getattr(self.module, "batch_transform", None)
         
         with torch.no_grad():
             
-            x = x.to(self.device)
-            if batch_transform:
-                x, _ = batch_transform(x)
-            
             self.module.eval()
-            y = self.module(x)
+            
+            if batch_transform:
+                batch = batch_transform(batch, self.device)
+            
+            x = batch["x"]
+            
+            if hasattr(self.module, "step_forward"):
+                _, y_predict = self.module.step_forward(x, self.device)
+            
+            else:
+                x = batch_to(x, self.device)
+                y = self.module(x)
         
         return y
     
@@ -413,12 +422,15 @@ class Model:
             for batch in loader:
                 
                 if batch_transform:
-                    batch = batch_transform(batch)
+                    batch = batch_transform(batch, self.device)
                 
-                x_batch = batch["x"].to(device)
-                y_batch = batch["y"].to(device)
+                if hasattr(self.module, "step_forward"):
+                    _, y_predict = self.module.step_forward(batch, self.device)
                 
-                y_predict = self.module(x_batch)
+                else:
+                    x_batch = batch_to(batch["x"], device)
+                    y_predict = self.module(x_batch)
+                
                 predict(batch, y_predict, obj)
                 
                 # Show progress
@@ -428,7 +440,7 @@ class Model:
                     t = str(round(time.time() - time_start))
                     print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
                 
-                del x_batch, y_batch, y_predict, batch
+                del x_batch, y_predict, batch
                 
                 # Clear cache
                 if torch.cuda.is_available():
@@ -606,7 +618,7 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, x):
+    def summary(self, x, batch_size=2):
         
         """
         Show model summary
@@ -614,7 +626,8 @@ class Model:
         
         summary(self.module, x,
             device=self.device,
-            model_name=self.get_model_name()
+            model_name=self.get_model_name(),
+            batch_size=batch_size
         )
     
         

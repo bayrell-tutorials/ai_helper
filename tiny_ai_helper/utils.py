@@ -646,13 +646,12 @@ def load_model_from_file(model, file_path):
     model.load_state_dict(state_dict, strict=False)
 
 
-def summary(module, x, model_name=None, device=None):
+def summary(module, x, model_name=None, device=None, batch_size=2):
         
         """
         Show model summary
         """
         
-        batch_transform = None
         hooks = []
         layers = []
         res = {
@@ -664,12 +663,15 @@ def summary(module, x, model_name=None, device=None):
         def forward_hook(module, input, output):
             
             output = output[0] if isinstance(output, tuple) else output
-            
+            output_shape = "(?)"
+            if hasattr(output, "shape") and isinstance(output, torch.Tensor):
+                output_shape = output.shape
+                
             class_name = module.__class__.__module__ + "." + module.__class__.__name__
             layer = {
                 "name": module.__class__.__name__,
                 "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
-                "shape": output.shape,
+                "shape": output_shape,
                 "params": 0
             }
             
@@ -707,29 +709,22 @@ def summary(module, x, model_name=None, device=None):
             hooks.append(module.register_forward_hook(forward_hook))
         
         # Get batch from Dataset
+        batch = None
         if isinstance(x, torch.utils.data.Dataset):
             loader = torch.utils.data.DataLoader(
                 x,
-                batch_size=10,
+                batch_size=batch_size,
                 drop_last=False,
                 shuffle=False
             )
             it = loader._get_iterator()
             
             batch = next(it)
+            
+            if hasattr(module, "batch_transform"):
+                batch = module.batch_transform(batch, device)
+            
             x = batch["x"]
-        
-        if batch_transform is None:
-            batch_transform = getattr(module, "batch_transform", None)
-        
-        # Trasform
-        if batch_transform is not None:
-            b = batch_transform({"x": x})
-            x = b["x"]
-        
-        # Move to device
-        if device is not None:
-            x = batch_to(x, device)
         
         # Add input size
         if isinstance(x, list) or isinstance(x, tuple):
@@ -743,6 +738,7 @@ def summary(module, x, model_name=None, device=None):
                 "shape": shapes,
                 "params": 0
             })
+        
         else:
             params, size = tensor_size(x)
             #res["total_size"] += size
@@ -752,11 +748,21 @@ def summary(module, x, model_name=None, device=None):
                 "params": 0
             })
         
-        # Module predict
         module.apply(add_hooks)
-        with torch.no_grad():
-            module.eval()
-            y = module(x)
+        
+        if hasattr(module, "step_forward"):
+            _, y = module.step_forward(batch, device)
+        
+        else:
+            
+            # Move to device
+            if device is not None:
+                x = batch_to(x, device)
+            
+            # Module predict
+            with torch.no_grad():
+                module.eval()
+                y = module(x)
         
         # Clear cache
         if torch.cuda.is_available():
@@ -919,17 +925,17 @@ def fit(
                     acc_value = None
                     
                     # Forward train
-                    if hasattr(module, "step_train"):
-                        loss, acc_value = module.step_train(model, batch)
+                    if hasattr(module, "step_forward"):
+                        loss, acc_value = module.step_forward(batch, device, loss_fn=loss_fn)
                     
                     else:
                         
                         # Data to device
                         if batch_transform:
-                            batch = batch_transform(batch)
+                            batch = batch_transform(batch, device)
                         
-                        x_batch = batch["x"].to(device)
-                        y_batch = batch["y"].to(device)
+                        x_batch = batch_to(batch["x"], device)
+                        y_batch = batch_to(batch["y"], device)
                         
                         y_pred = module(x_batch)
                         loss = loss_fn(y_pred, y_batch)
@@ -977,17 +983,17 @@ def fit(
                         acc_value = None
                         
                         # Forward
-                        if hasattr(module, "step_val"):
-                            loss, acc_value =  module.step_val(model, batch)
+                        if hasattr(module, "step_forward"):
+                            loss, acc_value = module.step_forward(batch, device, loss_fn=loss_fn)
                             
                         else:
                             
                             # data to device
                             if batch_transform:
-                                batch = batch_transform(batch)
+                                batch = batch_transform(batch, device)
                             
-                            x_batch = batch["x"].to(device)
-                            y_batch = batch["y"].to(device)
+                            x_batch = batch_to(batch["x"], device)
+                            y_batch = batch_to(batch["y"], device)
                             
                             y_pred = module(x_batch)
                             loss = loss_fn(y_pred, y_batch)
