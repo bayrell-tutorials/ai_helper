@@ -1047,7 +1047,7 @@ def fit(
         torch.cuda.empty_cache()
 
 
-def save_embeddings(dataset, file_name, transform, batch_size=8):
+def save_embeddings(dataset, file_name, transform, emb_size, batch_size=8):
     
     import h5py, gc
     
@@ -1069,7 +1069,7 @@ def save_embeddings(dataset, file_name, transform, batch_size=8):
     with h5py.File(file_name, 'w') as file:
         
         file_dataset = file.create_dataset(
-            'data', (dataset_count, 2*bert_emb_size), dtype='float32'
+            'data', (dataset_count, emb_size), dtype='float32'
         )
         
         for batch in loader:
