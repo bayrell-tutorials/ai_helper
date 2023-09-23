@@ -1060,7 +1060,7 @@ def save_embeddings(dataset, file_name, transform, batch_size=8):
     
     pos = 0
     next_pos = 0
-    dataset_count = len(self)
+    dataset_count = len(dataset)
     time_start = time.time()
     
     if os.path.exists(file_name):
@@ -1075,16 +1075,16 @@ def save_embeddings(dataset, file_name, transform, batch_size=8):
         for batch in loader:
             
             batch = transform(batch)
-            file_dataset[pos:pos+len(batch_x)] = batch["x"].cpu().numpy()
+            file_dataset[pos:pos+len(batch["x"])] = batch["x"].cpu().numpy()
             
             # Show progress
-            pos = pos + len(batch_x)
+            pos = pos + len(batch["x"])
             if pos > next_pos:
                 next_pos = pos + 16
                 t = str(round(time.time() - time_start))
                 print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
             
-            del batch_x, batch
+            del batch
             
             # Clear cache
             if torch.cuda.is_available():
@@ -1094,6 +1094,7 @@ def save_embeddings(dataset, file_name, transform, batch_size=8):
             file.flush()
         
         file.close()
+
 
 def colab_upload_file_to_google_drive(src, dest):
     
