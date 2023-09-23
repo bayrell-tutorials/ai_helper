@@ -9,7 +9,7 @@
 from .Model import Model, SaveCallback, ProgressCallback
 from .utils import compile, fit
 
-__version__ = "0.1.11"
+__version__ = "0.1.12"
 
 __all__ = (
     "Model",

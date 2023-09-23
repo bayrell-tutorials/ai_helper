@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 
 """
 List:
@@ -9,9 +9,11 @@ https://pypi.python.org/pypi?%3Aaction=list_classifiers
 from setuptools import setup, find_packages
 from os.path import abspath, dirname, join
 
+tiny_ai_helper = __import__("tiny_ai_helper")
+
 setup(
 	name="tiny_ai_helper",
-	version="0.1.11",
+	version=tiny_ai_helper.__version__,
 	description="Tiny AI Helper for PyTorch",
 	long_description=open(join(abspath(dirname(__file__)), 'README.md'), encoding='utf-8').read(),
 	long_description_content_type='text/markdown',
