@@ -751,7 +751,7 @@ def summary(module, x, model_name=None, device=None, batch_size=2):
         module.apply(add_hooks)
         
         if hasattr(module, "step_forward"):
-            _, y = module.step_forward(batch, device)
+            _, _, y = module.step_forward(batch, device)
         
         else:
             
@@ -878,6 +878,8 @@ def fit(
     scheduler = model.scheduler
     
     batch_transform = getattr(module, "batch_transform", None)
+    step_forward = getattr(module, "step_forward", None)
+    step_scheduler = getattr(module, "step_scheduler", None)
     
     if isinstance(loss_fn, nn.Module):
         loss_fn = loss_fn.to(model.device)
@@ -897,7 +899,6 @@ def fit(
     try:
         while model.do_training(epochs):
             
-            model.epoch = model.epoch + 1
             time_start = time.time()
             
             params["status"] = model.get_epoch_train_status()
@@ -925,8 +926,11 @@ def fit(
                     acc_value = None
                     
                     # Forward train
-                    if hasattr(module, "step_forward"):
-                        loss, acc_value = module.step_forward(batch, device, loss_fn=loss_fn)
+                    if step_forward is not None:
+                        loss, acc_value, _ = step_forward(
+                            batch, device,
+                            loss_fn=loss_fn, acc_fn=acc_fn
+                        )
                     
                     else:
                         
@@ -983,8 +987,11 @@ def fit(
                         acc_value = None
                         
                         # Forward
-                        if hasattr(module, "step_forward"):
-                            loss, acc_value = module.step_forward(batch, device, loss_fn=loss_fn)
+                        if step_forward is not None:
+                            loss, acc_value, _ = step_forward(
+                                batch, device,
+                                loss_fn=loss_fn, acc_fn=acc_fn
+                            )
                             
                         else:
                             
@@ -1030,11 +1037,16 @@ def fit(
             params["status"]["time_end"] = time_end
             
             if scheduler is not None:
-                module.step_scheduler(**params)
+                if step_scheduler is not None:
+                    step_scheduler(**params)
+                else:
+                    scheduler.step()
             
             model.add_epoch(**params)
             call_callback("on_end_epoch", params)
-        
+            
+            model.epoch = model.epoch + 1
+            
         call_callback("on_end", params)
         
     except KeyboardInterrupt:

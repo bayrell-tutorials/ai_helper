@@ -30,7 +30,7 @@ class Model:
         self.acc_reduction = 'sum'
         self.name = module.__class__.__name__
         self.prefix_name = ""
-        self.epoch = 0
+        self.epoch = 1
         self.history = {}
         self.min_lr = 1e-5
         self.model_path = ""
@@ -86,6 +86,9 @@ class Model:
             return self.name + "_" + self.prefix_name
         return self.name
     
+    def get_epoch(self):
+        return self.epoch - 1
+    
     
     def to(self, device):
         self.module = self.module.to(device)
@@ -112,7 +115,7 @@ class Model:
     def load_state_dict(self, save_metrics, strict=False):
         
         if "epoch" in save_metrics:
-            self.epoch = save_metrics["epoch"]
+            self.epoch = save_metrics["epoch"] + 1
             
             # Load history
             if "history" in save_metrics:
@@ -344,7 +347,7 @@ class Model:
         Returns True if model is need to train
         """
         
-        if self.epoch >= max_epochs:
+        if self.epoch > max_epochs:
             return False
         
         for item in self.optimizer.param_groups:
@@ -385,7 +388,7 @@ class Model:
             x = batch["x"]
             
             if hasattr(self.module, "step_forward"):
-                _, y_predict = self.module.step_forward(x, self.device)
+                _, _, y_predict = self.module.step_forward(x, self.device)
             
             else:
                 x = batch_to(x, self.device)
@@ -425,22 +428,23 @@ class Model:
                     batch = batch_transform(batch, self.device)
                 
                 if hasattr(self.module, "step_forward"):
-                    _, y_predict = self.module.step_forward(batch, self.device)
+                    _, _, y_predict = self.module.step_forward(batch, self.device)
                 
                 else:
                     x_batch = batch_to(batch["x"], device)
                     y_predict = self.module(x_batch)
+                    del x_batch
                 
                 predict(batch, y_predict, obj)
                 
                 # Show progress
-                pos = pos + len(x_batch)
+                pos = pos + len(batch['x'])
                 if pos > next_pos:
                     next_pos = pos + 16
                     t = str(round(time.time() - time_start))
                     print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
                 
-                del x_batch, y_predict, batch
+                del y_predict, batch
                 
                 # Clear cache
                 if torch.cuda.is_available():
@@ -965,26 +969,31 @@ class SaveCallback():
 
 class ProgressCallback():
     
-    def __init__(self, one_line=False, progress_iter=True, show_lr=True):
+    def __init__(self, one_line=False, progress_iter=True, show_lr=True, show_acc=True):
         self.one_line = one_line
         self.progress_iter = progress_iter
         
-        self.progress_string_train = ", ".join([
+        self.progress_string_train = [
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
-            "train_acc: {train_acc_percent:.2f}%",
-        ])
-        self.progress_string_val = ", ".join([
+            "train_acc: {train_acc_percent:.2f}%" if show_acc else "",
+        ]
+        self.progress_string_train = list(filter(lambda item: item != "", self.progress_string_train))
+        self.progress_string_train = ", ".join(self.progress_string_train)
+        
+        self.progress_string_val = [
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
-            "val_acc: {val_acc_percent:.2f}%",
-        ])
+            "val_acc: {val_acc_percent:.2f}%" if show_acc else "",
+        ]
+        self.progress_string_val = list(filter(lambda item: item != "", self.progress_string_val))
+        self.progress_string_val = ", ".join(self.progress_string_val)
         
         self.epoch_string = [
             "Epoch: {epoch}",
-            "train_acc: {train_acc_percent:.2f}%",
-            "val_acc: {val_acc_percent:.2f}%",
-            "rel: {rel:.3f}",
+            "train_acc: {train_acc_percent:.2f}%" if show_acc else "",
+            "val_acc: {val_acc_percent:.2f}%" if show_acc else "",
+            "rel: {rel:.3f}" if show_acc else "",
             "train_loss: {train_loss:.7f}",
             "val_loss: {val_loss:.7f}",
             "lr: {lr_str}" if show_lr else "",
