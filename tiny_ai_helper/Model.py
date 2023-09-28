@@ -723,13 +723,15 @@ class Model:
         return status
     
     
-    def add_epoch(self, status, **params):
+    def add_epoch(self, params):
+        status = params["status"]
         epoch = status["epoch"]
         self.history[epoch] = status.copy()
     
     
-    def on_train_iter(self, status, **params):
+    def on_train_iter(self, params):
         
+        status = params["status"]
         train_count = status["train_count"]
         train_acc_items = status["train_acc_items"]
         train_loss_items = status["train_loss_items"]
@@ -756,8 +758,9 @@ class Model:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
         
     
-    def on_val_iter(self, status, **params):
+    def on_val_iter(self, params):
         
+        status = params["status"]
         val_count = status["val_count"]
         val_acc_items = status["val_acc_items"]
         val_loss_items = status["val_loss_items"]
@@ -784,7 +787,9 @@ class Model:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
         
     
-    def on_end_epoch(self, status, **params):
+    def on_end_epoch(self, params):
+        
+        status = params["status"]
         
         lr = []
         for param_group in self.optimizer.param_groups:
@@ -796,18 +801,6 @@ class Model:
         status["lr"] = lr
         status["lr_str"] = "[" + ",".join([ str(round(item,7)) for item in lr ]) + "]"
     
-    
-    def get_epoch_string(self, epoch):
-        status = self.history[epoch]
-        return self.epoch_string.format(**status)
-        
-    
-    def get_progress_string(self, kind, status, **params):
-        if kind == "train":
-            return self.progress_string_train.format(**status)
-        if kind == "val":
-            return self.progress_string_val.format(**status)
-        
     
     def get_train_loss(self, epoch=None):
         if epoch is None:
@@ -943,7 +936,9 @@ class SaveCallback():
         self.save_train = save_train
         self.save_last = save_last
     
-    def on_end_epoch(self, model, **params):
+    def on_end_epoch(self, params):
+        
+        model = params["model"]
         
         is_save = False
         
@@ -1016,19 +1011,25 @@ class ProgressCallback():
             return self.progress_string_val.format(**status)
     
     
-    def on_train_iter(self, status, **params):
+    def on_train_iter(self, params):
+        
+        status = params["status"]
         
         if self.progress_iter:
             print ("\r" + self.get_progress_string("train", status), end="")
     
     
-    def on_val_iter(self, status, **params):
+    def on_val_iter(self, params):
+        
+        status = params["status"]
         
         if self.progress_iter:
             print ("\r" + self.get_progress_string("val", status), end="")
     
     
-    def on_end_epoch(self, status, **params):
+    def on_end_epoch(self, params):
+        
+        status = params["status"]
         
         if self.one_line:
             print( "\r" + self.get_epoch_string(status), end="" )
@@ -1036,7 +1037,7 @@ class ProgressCallback():
             print( "\r" + self.get_epoch_string(status) )
     
     
-    def on_end(self, **params):
+    def on_end(self, params):
         if self.one_line:
             print ("")
         

@@ -890,7 +890,7 @@ def fit(
                 if hasattr(callback, name):
                     f = getattr(callback, name, None)
                     if f is not None:
-                        f(**params)
+                        f(params)
     
     
     call_callback("on_start", params)
@@ -908,6 +908,9 @@ def fit(
                 params["status"]["total_count"] += len(val_dataset)
             
             call_callback("on_start_epoch", params)
+            
+            train_loader = params["train_loader"]
+            val_loader = params["val_loader"]
             
             if do_train != False:
                 
@@ -1038,11 +1041,11 @@ def fit(
             
             if scheduler is not None:
                 if step_scheduler is not None:
-                    step_scheduler(**params)
+                    step_scheduler(params)
                 else:
                     scheduler.step()
             
-            model.add_epoch(**params)
+            model.add_epoch(params)
             call_callback("on_end_epoch", params)
             
             model.epoch = model.epoch + 1
