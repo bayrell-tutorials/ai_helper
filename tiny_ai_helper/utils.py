@@ -264,6 +264,9 @@ def get_acc_binary(treshold=0.5):
         batch_predict = (batch_predict >= treshold) * 1.0
         acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
         
+        if len(batch_y.shape) == 2:
+            return acc / batch_y.shape[1]
+            
         return acc
         
     return f
@@ -646,176 +649,177 @@ def load_model_from_file(model, file_path):
     model.load_state_dict(state_dict, strict=False)
 
 
-def summary(module, x, model_name=None, device=None, batch_size=2):
+def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=None):
         
-        """
-        Show model summary
-        """
+    """
+    Show model summary
+    """
+    
+    hooks = []
+    layers = []
+    res = {
+        "params_count": 0,
+        "params_train_count": 0,
+        "total_size": 0,
+    }
+    
+    def forward_hook(module, input, output):
         
-        hooks = []
-        layers = []
-        res = {
-            "params_count": 0,
-            "params_train_count": 0,
-            "total_size": 0,
+        output = output[0] if isinstance(output, tuple) else output
+        output_shape = "(?)"
+        if hasattr(output, "shape") and isinstance(output, torch.Tensor):
+            output_shape = output.shape
+            
+        class_name = module.__class__.__module__ + "." + module.__class__.__name__
+        layer = {
+            "name": module.__class__.__name__,
+            "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
+            "shape": output_shape,
+            "params": 0
         }
         
-        def forward_hook(module, input, output):
-            
-            output = output[0] if isinstance(output, tuple) else output
-            output_shape = "(?)"
-            if hasattr(output, "shape") and isinstance(output, torch.Tensor):
-                output_shape = output.shape
-                
-            class_name = module.__class__.__module__ + "." + module.__class__.__name__
-            layer = {
-                "name": module.__class__.__name__,
-                "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
-                "shape": output_shape,
-                "params": 0
-            }
-            
-            if layer["name"] == model_name:
-                layer["name"] = "Output"
-            
-            # Get weight
-            if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
-                params, size = tensor_size(module.weight)
-                res["params_count"] += params
-                res["total_size"] += size
-                layer["params"] += params
-                
-                if module.weight.requires_grad:
-                    res["params_train_count"] += params
-            
-            # Get bias
-            if hasattr(module, "bias") and isinstance(module.bias, torch.Tensor):
-                params, size = tensor_size(module.bias)
-                res["params_count"] += params
-                res["total_size"] += size
-                layer["params"] += params
-                
-                if module.bias.requires_grad:
-                    res["params_train_count"] += params
-            
-            # Add output size
-            params, size = tensor_size(output)
-            #res["total_size"] += size
-            
-            # Add layer
-            layers.append(layer)
-                
-        def add_hooks(module):
-            hooks.append(module.register_forward_hook(forward_hook))
+        if layer["name"] == model_name:
+            layer["name"] = "Output"
         
-        # Get batch from Dataset
-        batch = None
-        if isinstance(x, torch.utils.data.Dataset):
-            loader = torch.utils.data.DataLoader(
-                x,
-                batch_size=batch_size,
-                drop_last=False,
-                shuffle=False
-            )
-            it = loader._get_iterator()
+        # Get weight
+        if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
+            params, size = tensor_size(module.weight)
+            res["params_count"] += params
+            res["total_size"] += size
+            layer["params"] += params
             
-            batch = next(it)
-            
-            if hasattr(module, "batch_transform"):
-                batch = module.batch_transform(batch, device)
-            
-            x = batch["x"]
+            if module.weight.requires_grad:
+                res["params_train_count"] += params
         
-        # Add input size
-        if isinstance(x, list) or isinstance(x, tuple):
-            shapes = []
-            for i in range(len(x)):
-                params, size = tensor_size(x[i])
-                shapes.append(x[i].shape)
-            #res["total_size"] += size
-            layers.append({
-                "name": "Input",
-                "shape": shapes,
-                "params": 0
-            })
+        # Get bias
+        if hasattr(module, "bias") and isinstance(module.bias, torch.Tensor):
+            params, size = tensor_size(module.bias)
+            res["params_count"] += params
+            res["total_size"] += size
+            layer["params"] += params
+            
+            if module.bias.requires_grad:
+                res["params_train_count"] += params
         
+        # Add output size
+        params, size = tensor_size(output)
+        #res["total_size"] += size
+        
+        # Add layer
+        layers.append(layer)
+            
+    def add_hooks(module):
+        hooks.append(module.register_forward_hook(forward_hook))
+    
+    # Get batch from Dataset
+    batch = None
+    if isinstance(x, torch.utils.data.Dataset):
+        loader = torch.utils.data.DataLoader(
+            x,
+            batch_size=batch_size,
+            collate_fn=collate_fn,
+            drop_last=False,
+            shuffle=False
+        )
+        it = loader._get_iterator()
+        
+        batch = next(it)
+        
+        if hasattr(module, "batch_transform"):
+            batch = module.batch_transform(batch, device)
+        
+        x = batch["x"]
+    
+    # Add input size
+    if isinstance(x, list) or isinstance(x, tuple):
+        shapes = []
+        for i in range(len(x)):
+            params, size = tensor_size(x[i])
+            shapes.append(x[i].shape)
+        #res["total_size"] += size
+        layers.append({
+            "name": "Input",
+            "shape": shapes,
+            "params": 0
+        })
+    
+    else:
+        params, size = tensor_size(x)
+        #res["total_size"] += size
+        layers.append({
+            "name": "Input",
+            "shape": x.shape,
+            "params": 0
+        })
+    
+    module.apply(add_hooks)
+    
+    if hasattr(module, "step_forward"):
+        _, _, y = module.step_forward(batch, device)
+    
+    else:
+        
+        # Move to device
+        if device is not None:
+            x = batch_to(x, device)
+        
+        # Module predict
+        with torch.no_grad():
+            module.eval()
+            y = module(x)
+    
+    # Clear cache
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    # Remove hooks
+    for item in hooks:
+        item.remove()
+    
+    res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
+    
+    # Calc info
+    values = []
+    for i, layer in enumerate(layers):
+        shape = layer["shape"]
+        shape_str = ""
+        if isinstance(shape, list):
+            shape = [ "(" + ", ".join(map(str,s)) + ")" for s in shape ]
+            shape_str = "[" + ", ".join(shape) + "]"
         else:
-            params, size = tensor_size(x)
-            #res["total_size"] += size
-            layers.append({
-                "name": "Input",
-                "shape": x.shape,
-                "params": 0
-            })
+            shape_str = "(" + ", ".join(map(str,shape)) + ")"
         
-        module.apply(add_hooks)
+        values.append([i + 1, layer["name"], shape_str, layer["params"]])
+    
+    # Print info
+    info_sizes = [2, 7, 7, 5]
+    for _, value in enumerate(values):
+        for i in range(4):
+            sz = len(str(value[i]))
+            if info_sizes[i] < sz:
+                info_sizes[i] = sz
         
-        if hasattr(module, "step_forward"):
-            _, _, y = module.step_forward(batch, device)
-        
-        else:
-            
-            # Move to device
-            if device is not None:
-                x = batch_to(x, device)
-            
-            # Module predict
-            with torch.no_grad():
-                module.eval()
-                y = module(x)
-        
-        # Clear cache
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        # Remove hooks
-        for item in hooks:
-            item.remove()
-        
-        res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
-        
-        # Calc info
-        values = []
-        for i, layer in enumerate(layers):
-            shape = layer["shape"]
-            shape_str = ""
-            if isinstance(shape, list):
-                shape = [ "(" + ", ".join(map(str,s)) + ")" for s in shape ]
-                shape_str = "[" + ", ".join(shape) + "]"
-            else:
-                shape_str = "(" + ", ".join(map(str,shape)) + ")"
-            
-            values.append([i + 1, layer["name"], shape_str, layer["params"]])
-        
-        # Print info
-        info_sizes = [2, 7, 7, 5]
-        for _, value in enumerate(values):
-            for i in range(4):
-                sz = len(str(value[i]))
-                if info_sizes[i] < sz:
-                    info_sizes[i] = sz
-            
-        def format_row(arr, size):
-            s = "{:<"+str(size[0] + 1)+"} {:>"+str(size[1] + 2)+"}" + \
-                "{:>"+str(size[2] + 5)+"} {:>"+str(size[3] + 5)+"}"
-            return s.format(*arr)
-        
-        width = info_sizes[0] + 1 + info_sizes[1] + 2 + info_sizes[2] + 5 + info_sizes[3] + 5 + 2
-        print( "=" * width )
-        print( format_row(["", "Layer", "Output", "Params"], info_sizes) )
-        print( "-" * width )
-        
-        for _, value in enumerate(values):
-            print( format_row(value, info_sizes) )
-        
-        print( "-" * width )
-        if model_name is not None:
-            print( f"Model name: {model_name}" )
-        print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
-        if res['params_count'] != res['params_train_count'] and res['params_train_count'] > 0:
-            print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
-        print( f"Total size: {res['total_size']} MiB" )
-        print( "=" * width )
+    def format_row(arr, size):
+        s = "{:<"+str(size[0] + 1)+"} {:>"+str(size[1] + 2)+"}" + \
+            "{:>"+str(size[2] + 5)+"} {:>"+str(size[3] + 5)+"}"
+        return s.format(*arr)
+    
+    width = info_sizes[0] + 1 + info_sizes[1] + 2 + info_sizes[2] + 5 + info_sizes[3] + 5 + 2
+    print( "=" * width )
+    print( format_row(["", "Layer", "Output", "Params"], info_sizes) )
+    print( "-" * width )
+    
+    for _, value in enumerate(values):
+        print( format_row(value, info_sizes) )
+    
+    print( "-" * width )
+    if model_name is not None:
+        print( f"Model name: {model_name}" )
+    print( f"Total params: {res['params_count']:_}".replace('_', ' ') )
+    if res['params_count'] != res['params_train_count'] and res['params_train_count'] > 0:
+        print( f"Trainable params: {res['params_train_count']:_}".replace('_', ' ') )
+    print( f"Total size: {res['total_size']} MiB" )
+    print( "=" * width )
 
 
 def compile(module):
@@ -825,7 +829,7 @@ def compile(module):
 
 def fit(
     model, train_dataset=None, val_dataset=None,
-    batch_size=64, epochs=10,
+    batch_size=64, epochs=10, collate_fn=None,
     callbacks=None, do_train=True, do_val=True,
     **params
 ):
@@ -850,24 +854,28 @@ def fit(
         torch.cuda.empty_cache()
     
     # Train loader
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        drop_last=False,
-        shuffle=True
-    )
-    params["train_loader"] = train_loader
+    if not "train_loader" in params:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            collate_fn=collate_fn,
+            drop_last=False,
+            shuffle=True
+        )
+        params["train_loader"] = train_loader
     
     # Val loader
     val_loader = None
     if val_dataset:
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            drop_last=False,
-            shuffle=False
-        )
-        params["val_loader"] = val_loader
+        if not "val_loader" in params:
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=batch_size,
+                collate_fn=collate_fn,
+                drop_last=False,
+                shuffle=False
+            )
+            params["val_loader"] = val_loader
     
     acc_fn = model.acc_fn
     device = model.device
@@ -880,6 +888,7 @@ def fit(
     batch_transform = getattr(module, "batch_transform", None)
     step_forward = getattr(module, "step_forward", None)
     step_scheduler = getattr(module, "step_scheduler", None)
+    get_batch_size = getattr(module, "get_batch_size", None)
     
     if isinstance(loss_fn, nn.Module):
         loss_fn = loss_fn.to(model.device)
@@ -919,9 +928,11 @@ def fit(
                 
                 for batch in train_loader:
                     
-                    batch_len = len(batch["x"][0]) \
-                        if isinstance(batch["x"], tuple) or isinstance(batch["x"], list) \
-                        else len(batch["x"])
+                    batch_len = 1
+                    if get_batch_size is not None:
+                        batch_len = get_batch_size(batch)
+                    else:
+                        batch_len = len(batch["x"])
                     
                     # Set parameter gradients to zero
                     optimizer.zero_grad()
@@ -983,9 +994,11 @@ def fit(
 
                     for batch in val_loader:
                         
-                        batch_len = len(batch["x"][0]) \
-                            if isinstance(batch["x"], tuple) or isinstance(batch["x"], list) \
-                            else len(batch["x"])
+                        batch_len = 1
+                        if get_batch_size is not None:
+                            batch_len = get_batch_size(batch)
+                        else:
+                            batch_len = len(batch["x"])
                         
                         acc_value = None
                         

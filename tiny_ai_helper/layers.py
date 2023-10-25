@@ -10,7 +10,6 @@ import torch
 import numpy as np
 from typing import overload
 from PIL import Image, ImageDraw
-from .utils import resize_image
 
 
 class Lambda(torch.nn.Module):
@@ -141,6 +140,8 @@ class ResizeImage(torch.nn.Module):
     
     def forward(self, batch):
         
+        from .utils import resize_image
+        
         res = []
         for t in batch:
             t = resize_image(t, self.size, contain=self.contain, color=self.color)
@@ -225,7 +226,7 @@ class Stacking(torch.nn.Module):
     def forward(self, tensor_list):
         
         device = tensor_list[0].device
-        res = torch.tensor([]).to(device)
+        res = []
         
         keys = list(self._modules.keys())
         for index, m in enumerate(keys):
@@ -239,8 +240,10 @@ class Stacking(torch.nn.Module):
                 module = self._modules[m]
                 x = module(x)
             
-            res = torch.cat( (res, x), dim = 1 )
-            
+            res.append(x)
+        
+        res = torch.vstack(res)
+        
         return res
     
     def state_dict(self, destination=None, prefix='', keep_vars=False):

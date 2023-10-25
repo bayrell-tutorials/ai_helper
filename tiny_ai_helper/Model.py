@@ -8,7 +8,7 @@
 
 import torch, time, json, math, gc, os
 import numpy as np
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, Dataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, \
     load_json, summary, fit
@@ -46,16 +46,18 @@ class Model:
         self.optimizer = optimizer
         return self
     
-    def set_loss(self, loss):
+    def set_loss(self, loss, reduction = 'mean'):
         self.loss = loss
+        self.loss_reduction = reduction
         return self
     
     def set_scheduler(self, scheduler):
         self.scheduler = scheduler
         return self
     
-    def set_acc(self, acc):
+    def set_acc(self, acc, reduction = 'sum'):
         self.acc_fn = acc
+        self.acc_reduction = reduction
         return self
     
     def set_name(self, name):
@@ -397,19 +399,26 @@ class Model:
         return y
     
     
-    def predict_dataset(self, dataset, predict, batch_size=64, obj=None):
+    def predict_dataset(self, dataset, predict, batch_size=64, obj=None, collate_fn=None):
         
         """
         Predict dataset
         """
         
+        loader = None
         device = self.device
-        loader = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            drop_last=False,
-            shuffle=False
-        )
+        
+        if isinstance(dataset, Dataset):
+            loader = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                collate_fn=collate_fn,
+                drop_last=False,
+                shuffle=False
+            )
+        
+        if isinstance(dataset, DataLoader):
+            loader = dataset
         
         batch_transform = getattr(self.module, "batch_transform", None)
         
@@ -442,7 +451,10 @@ class Model:
                 if pos > next_pos:
                     next_pos = pos + 16
                     t = str(round(time.time() - time_start))
-                    print ("\r" + str(math.floor(pos / dataset_count * 100)) + "% " + t + "s", end='')
+                    print (
+                        "\r" + str(math.floor(pos / dataset_count * 10000) / 100) + "% " +
+                        t + "s", end=''
+                    )
                 
                 del y_predict, batch
                 
@@ -622,7 +634,7 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, x, batch_size=2):
+    def summary(self, x, batch_size=2, collate_fn=None):
         
         """
         Show model summary
@@ -630,6 +642,7 @@ class Model:
         
         summary(self.module, x,
             device=self.device,
+            collate_fn=collate_fn,
             model_name=self.get_model_name(),
             batch_size=batch_size
         )
