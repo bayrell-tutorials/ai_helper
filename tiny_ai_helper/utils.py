@@ -846,6 +846,8 @@ def fit(
     params["epochs"] = epochs
     params["status"] = None
     params["callbacks"] = callbacks
+    params["collate_fn"] = collate_fn
+    params["iter"] = {}
     
     device = model.device
     model_name = model.get_model_name()
@@ -938,6 +940,7 @@ def fit(
                     optimizer.zero_grad()
                     
                     acc_value = None
+                    loss = None
                     
                     # Forward train
                     if step_forward is not None:
@@ -962,6 +965,10 @@ def fit(
                         if acc_fn is not None:
                             acc_value = acc_fn(y_pred, y_batch)
                         
+                        params["iter"]["x_batch"] = x_batch
+                        params["iter"]["y_batch"] = y_batch
+                        params["iter"]["y_pred"] = y_pred
+                        
                         del x_batch, y_batch, y_pred
                     
                     # Backward
@@ -972,16 +979,26 @@ def fit(
                     params["status"]["pos"] += batch_len
                     params["status"]["train_count"] += batch_len
                     params["status"]["train_loss_items"].append( loss.item() )
+                    params["status"]["t"] = round(time.time() - time_start)
                     
                     if acc_value is not None:
                         params["status"]["train_acc_items"].append( acc_value )
                     
+                    call_callback("on_train_iter", params)
+                    
                     # Clear cache
+                    if "x_batch" in params["iter"]:
+                        del params["iter"]["x_batch"]
+                    
+                    if "y_batch" in params["iter"]:
+                        del params["iter"]["y_batch"]
+                    
+                    if "y_pred" in params["iter"]:
+                        del params["iter"]["y_pred"]
+                    
                     del loss
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
-                    
-                    call_callback("on_train_iter", params)
             
             call_callback("on_train", params)
             
@@ -1001,6 +1018,7 @@ def fit(
                             batch_len = len(batch["x"])
                         
                         acc_value = None
+                        loss = None
                         
                         # Forward
                         if step_forward is not None:
@@ -1025,34 +1043,46 @@ def fit(
                             if acc_fn is not None:
                                 acc_value = acc_fn(y_pred, y_batch)
                             
+                            params["iter"]["x_batch"] = x_batch
+                            params["iter"]["y_batch"] = y_batch
+                            params["iter"]["y_pred"] = y_pred
+                            
                             del x_batch, y_batch, y_pred
                         
                         # Add status
                         params["status"]["pos"] += batch_len
                         params["status"]["val_count"] += batch_len
                         params["status"]["val_loss_items"].append( loss.item() )
+                        params["status"]["t"] = round(time.time() - time_start)
                         
                         if acc_value is not None:
                             params["status"]["val_acc_items"].append( acc_value )
                         
+                        call_callback("on_val_iter", params)
+                        
                         # Clear cache
+                        if "x_batch" in params["iter"]:
+                            del params["iter"]["x_batch"]
+                        
+                        if "y_batch" in params["iter"]:
+                            del params["iter"]["y_batch"]
+                        
+                        if "y_pred" in params["iter"]:
+                            del params["iter"]["y_pred"]
+                        
                         del loss
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                        
-                        call_callback("on_val_iter", params)
             
             call_callback("on_val", params)
             call_callback("on_next_epoch", params)
             
             # Add metricks
             time_end = time.time()
-            t = round(time_end - time_start)
-            
-            params["status"]["t"] = t
+            params["status"]["t"] = round(time_end - time_start)
             params["status"]["time_end"] = time_end
             
-            call_callback("on_metricks", params)
+            call_callback("on_end_epoch", params)
             
             if scheduler is not None:
                 if step_scheduler is not None:
@@ -1061,7 +1091,7 @@ def fit(
                     scheduler.step()
             
             model.add_epoch(params)
-            call_callback("on_end_epoch", params)
+            call_callback("on_save", params)
             
             model.epoch = model.epoch + 1
             

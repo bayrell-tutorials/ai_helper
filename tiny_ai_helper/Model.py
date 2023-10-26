@@ -800,7 +800,10 @@ class Model:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
         
     
-    def on_metricks(self, params):
+    def on_end_epoch(self, params):
+        
+        self.on_train_iter(params)
+        self.on_val_iter(params)
         
         status = params["status"]
         
@@ -941,6 +944,40 @@ class Model:
         shutil.copy(src_file_path, dest_file_path)
 
 
+class ReAccuracyCallback():
+    
+    def on_start_epoch(self, params):
+        
+        self.train_y_batch = []
+        self.train_y_pred = []
+        self.val_y_batch = []
+        self.val_y_pred = []
+    
+    def on_train_iter(self, params):
+        
+        self.train_y_batch += params["iter"]["y_batch"].detach().cpu()
+        self.train_y_pred += params["iter"]["y_pred"].detach().cpu()
+
+    def on_val_iter(self, params):
+        
+        self.val_y_batch += params["iter"]["y_batch"].detach().cpu()
+        self.val_y_pred += params["iter"]["y_pred"].detach().cpu()
+    
+    def on_train(self, params):
+        
+        acc_fn = params["model"].acc_fn
+        params["status"]["train_acc_items"] = [
+            acc_fn(torch.vstack(self.train_y_pred), torch.vstack(self.train_y_batch))
+        ]
+        
+    def on_val(self, params):
+        
+        acc_fn = params["model"].acc_fn
+        params["status"]["val_acc_items"] = [
+            acc_fn(torch.vstack(self.val_y_pred), torch.vstack(self.val_y_batch))
+        ]
+
+
 class SaveCallback():
     
     def __init__(self, count=20, save_weights=True, save_train=True, save_last=False):
@@ -949,7 +986,7 @@ class SaveCallback():
         self.save_train = save_train
         self.save_last = save_last
     
-    def on_end_epoch(self, params):
+    def on_save(self, params):
         
         model = params["model"]
         
@@ -985,6 +1022,8 @@ class ProgressCallback():
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
             "train_acc: {train_acc_percent:.2f}%" if show_acc else "",
+            "train_loss: {train_loss:.7f}",
+            "{t}s",
         ]
         self.progress_string_train = list(filter(lambda item: item != "", self.progress_string_train))
         self.progress_string_train = ", ".join(self.progress_string_train)
@@ -993,6 +1032,8 @@ class ProgressCallback():
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
             "val_acc: {val_acc_percent:.2f}%" if show_acc else "",
+            "val_loss: {val_loss:.7f}",
+            "{t}s",
         ]
         self.progress_string_val = list(filter(lambda item: item != "", self.progress_string_val))
         self.progress_string_val = ", ".join(self.progress_string_val)
@@ -1060,3 +1101,69 @@ class ProgressCallback():
             print ("")
         
         print ("Ok")
+
+
+class ReloadDatasetCallback():
+    
+    def on_start_epoch(self, params):
+        
+        # Train loader
+        params["train_loader"] = DataLoader(
+            params["train_dataset"],
+            batch_size=params["batch_size"],
+            collate_fn=params["collate_fn"],
+            drop_last=False,
+            shuffle=True
+        )
+        
+        # Val loader
+        if "val_dataset" in params:
+            params["val_loader"] = DataLoader(
+                params["val_dataset"],
+                batch_size=params["batch_size"],
+                collate_fn=params["collate_fn"],
+                drop_last=False,
+                shuffle=False
+            )
+
+
+class RandomDatasetCallback():
+
+    def __init__(self, train_count, val_count=None):
+        self.train_count = train_count
+        self.val_count = val_count
+
+    def get_indices(self, total_count, iter_count):
+        indices = list(np.random.permutation(total_count))
+        return indices[:iter_count]
+
+    def on_start_epoch(self, params):
+        
+        from torch.utils.data import SubsetRandomSampler
+        
+        status = params['status']
+        batch_size = params['batch_size']
+
+        params['train_loader'] = DataLoader(
+            params['train_dataset'],
+            batch_size=batch_size,
+            collate_fn=params["collate_fn"],
+            sampler=SubsetRandomSampler(
+                self.get_indices(len(params['train_dataset']), self.train_count)
+            )
+        )
+        
+        status["total_count"] = self.train_count
+        
+        if self.val_count is not None:
+            params['val_loader'] = DataLoader(
+                params['val_dataset'],
+                batch_size=batch_size,
+                collate_fn=params["collate_fn"],
+                sampler=SubsetRandomSampler(
+                    self.get_indices(len(params['val_dataset']), self.val_count)
+                )
+            )
+            
+            status["total_count"] += self.val_count
+

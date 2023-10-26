@@ -6,7 +6,9 @@
 # License: MIT
 ##
 
-from .Model import Model, SaveCallback, ProgressCallback
+from .Model import Model, SaveCallback, ProgressCallback, \
+        ReloadDatasetCallback, RandomDatasetCallback, \
+        ReAccuracyCallback
 from .utils import compile, fit
 from .csv import CSVReader
 
@@ -16,6 +18,9 @@ __all__ = (
     "Model",
     "SaveCallback",
     "ProgressCallback",
+    "ReAccuracyCallback",
+    "RandomDatasetCallback",
+    "ReloadDatasetCallback",
     "CSVReader",
     "compile",
     "fit",
