@@ -1052,6 +1052,8 @@ def fit(
             params["status"]["t"] = t
             params["status"]["time_end"] = time_end
             
+            call_callback("on_metricks", params)
+            
             if scheduler is not None:
                 if step_scheduler is not None:
                     step_scheduler(params)

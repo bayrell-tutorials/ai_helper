@@ -699,13 +699,13 @@ class Model:
         plt.show()
     
     
-    def print_history(self):
+    def print_history(self, progress):
         
         h = list(self.history.keys())
         h.sort()
         
         for epoch in h:
-            s = self.get_epoch_string(epoch)
+            s = progress.get_epoch_string(self.history[epoch].copy())
             print(s)
     
     
@@ -800,7 +800,7 @@ class Model:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
         
     
-    def on_end_epoch(self, params):
+    def on_metricks(self, params):
         
         status = params["status"]
         
@@ -1011,7 +1011,12 @@ class ProgressCallback():
         self.epoch_string = ", ".join(self.epoch_string)
     
     
+    def get_status(self, status):
+        return status
+    
+    
     def get_epoch_string(self, status):
+        status = self.get_status(status)
         return self.epoch_string.format(**status)
     
     
