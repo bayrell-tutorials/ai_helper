@@ -681,24 +681,20 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
         if layer["name"] == model_name:
             layer["name"] = "Output"
         
-        # Get weight
-        if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
-            params, size = tensor_size(module.weight)
+        # Calc parameters
+        for name, p in module.named_parameters():
+            
+            if "." in name:
+                continue
+            
+            params = p.numel()
+            size = p.numel() * p.element_size()
+            
             res["params_count"] += params
             res["total_size"] += size
             layer["params"] += params
             
-            if module.weight.requires_grad:
-                res["params_train_count"] += params
-        
-        # Get bias
-        if hasattr(module, "bias") and isinstance(module.bias, torch.Tensor):
-            params, size = tensor_size(module.bias)
-            res["params_count"] += params
-            res["total_size"] += size
-            layer["params"] += params
-            
-            if module.bias.requires_grad:
+            if p.requires_grad:
                 res["params_train_count"] += params
         
         # Add output size
@@ -889,6 +885,7 @@ def fit(
     
     batch_transform = getattr(module, "batch_transform", None)
     step_forward = getattr(module, "step_forward", None)
+    step_loss = getattr(module, "step_loss", None)
     step_scheduler = getattr(module, "step_scheduler", None)
     get_batch_size = getattr(module, "get_batch_size", None)
     
@@ -957,9 +954,13 @@ def fit(
                         
                         x_batch = batch_to(batch["x"], device)
                         y_batch = batch_to(batch["y"], device)
-                        
                         y_pred = module(x_batch)
-                        loss = loss_fn(y_pred, y_batch)
+                        
+                        # Calc loss
+                        if step_loss is not None:
+                            loss = step_loss(y_pred, y_batch, loss_fn=loss_fn)
+                        else:
+                            loss = loss_fn(y_pred, y_batch, loss_fn=loss_fn)
                         
                         # Calc accuracy
                         if acc_fn is not None:
@@ -1035,9 +1036,13 @@ def fit(
                             
                             x_batch = batch_to(batch["x"], device)
                             y_batch = batch_to(batch["y"], device)
-                            
                             y_pred = module(x_batch)
-                            loss = loss_fn(y_pred, y_batch)
+                            
+                            # Calc loss
+                            if step_loss is not None:
+                                loss = step_loss(y_pred, y_batch)
+                            else:
+                                loss = loss_fn(y_pred, y_batch)
                             
                             # Calc accuracy
                             if acc_fn is not None:
