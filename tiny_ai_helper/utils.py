@@ -960,7 +960,7 @@ def fit(
                         if step_loss is not None:
                             loss = step_loss(y_pred, y_batch, loss_fn=loss_fn)
                         else:
-                            loss = loss_fn(y_pred, y_batch, loss_fn=loss_fn)
+                            loss = loss_fn(y_pred, y_batch)
                         
                         # Calc accuracy
                         if acc_fn is not None:
@@ -1040,7 +1040,7 @@ def fit(
                             
                             # Calc loss
                             if step_loss is not None:
-                                loss = step_loss(y_pred, y_batch)
+                                loss = step_loss(y_pred, y_batch, loss_fn=loss_fn)
                             else:
                                 loss = loss_fn(y_pred, y_batch)
                             

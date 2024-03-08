@@ -12,7 +12,7 @@ from .Model import Model, SaveCallback, ProgressCallback, \
 from .utils import compile, fit
 from .csv import CSVReader
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 
 __all__ = (
     "Model",

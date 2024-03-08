@@ -3,7 +3,7 @@
 SCRIPT=$(readlink -f $0)
 SCRIPT_PATH=`dirname $SCRIPT`
 BASE_PATH=`dirname $SCRIPT_PATH`
-version="0.1.13"
+version="0.1.14"
 
 case "$1" in
 	
@@ -31,7 +31,8 @@ case "$1" in
 	upload)
 		twine check dist/tiny_ai_helper-$version.tar.gz
 		twine check dist/tiny_ai_helper-$version-py3-none-any.whl
-		twine upload -r tiny_ai_helper dist/*
+		twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version.tar.gz
+		twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version-py3-none-any.whl
 	;;
 	
 	clean)
