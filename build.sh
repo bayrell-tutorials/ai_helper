@@ -29,10 +29,10 @@ case "$1" in
 	;;
 	
 	upload)
-		twine check dist/tiny_ai_helper-$version.tar.gz
-		twine check dist/tiny_ai_helper-$version-py3-none-any.whl
-		twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version.tar.gz
-		twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version-py3-none-any.whl
+		twine check dist/tiny_ai_helper-$version.tar.gz && \
+			twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version.tar.gz
+		twine check dist/tiny_ai_helper-$version-py3-none-any.whl && \
+			twine upload -r tiny_ai_helper dist/tiny_ai_helper-$version-py3-none-any.whl
 	;;
 	
 	clean)
