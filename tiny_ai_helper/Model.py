@@ -11,7 +11,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, \
-    load_json, summary, fit
+    load_json, summary, fit, get_acc_class, get_acc_binary
 
 
 class Model:
@@ -26,8 +26,6 @@ class Model:
         self.loss = None
         self.loss_reduction = 'mean'
         self.best_metrics = ["epoch"]
-        self.acc_fn = None
-        self.acc_reduction = 'sum'
         self.name = module.__class__.__name__
         self.prefix_name = ""
         self.epoch = 1
@@ -53,11 +51,6 @@ class Model:
     
     def set_scheduler(self, scheduler):
         self.scheduler = scheduler
-        return self
-    
-    def set_acc(self, acc, reduction = 'sum'):
-        self.acc_fn = acc
-        self.acc_reduction = reduction
         return self
     
     def set_name(self, name):
@@ -390,7 +383,7 @@ class Model:
             x = batch["x"]
             
             if hasattr(self.module, "step_forward"):
-                _, _, y_predict = self.module.step_forward(x, self.device)
+                _, y_predict = self.module.step_forward(x, self.device)
             
             else:
                 x = batch_to(x, self.device)
@@ -437,7 +430,7 @@ class Model:
                     batch = batch_transform(batch, self.device)
                 
                 if hasattr(self.module, "step_forward"):
-                    _, _, y_predict = self.module.step_forward(batch, self.device)
+                    _, y_predict = self.module.step_forward(batch, self.device)
                 
                 else:
                     x_batch = batch_to(batch["x"], device)
@@ -634,7 +627,7 @@ class Model:
                     os.unlink(file_path)
     
     
-    def summary(self, x, batch_size=2, collate_fn=None):
+    def summary(self, x, batch_size=2, collate_fn=None, ignore=None):
         
         """
         Show model summary
@@ -644,7 +637,8 @@ class Model:
             device=self.device,
             collate_fn=collate_fn,
             model_name=self.get_model_name(),
-            batch_size=batch_size
+            batch_size=batch_size,
+            ignore=ignore
         )
     
         
@@ -746,7 +740,6 @@ class Model:
         
         status = params["status"]
         train_count = status["train_count"]
-        train_acc_items = status["train_acc_items"]
         train_loss_items = status["train_loss_items"]
         
         if self.loss_reduction == "mean":
@@ -757,16 +750,6 @@ class Model:
             if len(train_loss_items) > 0 and train_count > 0:
                 status["train_loss"] = sum(train_loss_items) / train_count
         
-        if self.acc_reduction == "mean":
-            if len(train_acc_items) > 0:
-                status["train_acc"] = sum(train_acc_items) / len(train_acc_items)
-                status["train_acc_percent"] = status["train_acc"] * 100
-        
-        elif self.acc_reduction == "sum":
-            if len(train_acc_items) > 0 and train_count > 0:
-                status["train_acc"] = sum(train_acc_items) / train_count
-                status["train_acc_percent"] = status["train_acc"] * 100
-        
         if status["total_count"] > 0:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
         
@@ -775,7 +758,6 @@ class Model:
         
         status = params["status"]
         val_count = status["val_count"]
-        val_acc_items = status["val_acc_items"]
         val_loss_items = status["val_loss_items"]
         
         if self.loss_reduction == "mean":
@@ -785,16 +767,6 @@ class Model:
         elif self.loss_reduction == "sum":
             if len(val_loss_items) > 0 and val_count > 0:
                 status["val_loss"] = sum(val_loss_items) / val_count
-        
-        if self.acc_reduction == "mean":
-            if len(val_acc_items) > 0:
-                status["val_acc"] = sum(val_acc_items) / len(val_acc_items)
-                status["val_acc_percent"] = status["val_acc"] * 100
-        
-        elif self.acc_reduction == "sum":
-            if len(val_acc_items) > 0 and val_count > 0:
-                status["val_acc"] = sum(val_acc_items) / val_count
-                status["val_acc_percent"] = status["val_acc"] * 100
         
         if status["total_count"] > 0:
             status["iter_value"] = (status["pos"] / status["total_count"]) * 100
@@ -810,9 +782,6 @@ class Model:
         lr = []
         for param_group in self.optimizer.param_groups:
             lr.append( param_group['lr'] )
-        
-        if not(status["train_acc"] is None) and not(status["val_acc"] is None):
-            status["rel"] = (status["train_acc"] / status["val_acc"]) if status["val_acc"] > 0 else 0
         
         status["lr"] = lr
         status["lr_str"] = "[" + ",".join([ str(round(item,7)) for item in lr ]) + "]"
@@ -944,6 +913,77 @@ class Model:
         shutil.copy(src_file_path, dest_file_path)
 
 
+class AccuracyCallback():
+    
+    def __init__(self, acc=None, binary=False, reduction="sum"):
+        self.acc = acc
+        self.reduction = reduction
+        if self.acc is None:
+            if binary:
+                self.acc = get_acc_binary()
+            else:
+                self.acc = get_acc_class()
+    
+    def on_start_epoch(self, params):
+        status = params["status"]
+        status["train_acc"] = 0
+        status["train_acc_percent"] = 0
+        status["train_acc_items"] = []
+        status["val_acc"] = 0
+        status["val_acc_percent"] = 0
+        status["val_acc_items"] = []
+    
+    def on_train_iter(self, params):
+        
+        status = params["status"]
+        train_acc_items = status["train_acc_items"]
+        train_count = status["train_count"]
+        y_batch = params["iter"]["y_batch"]
+        y_pred = params["iter"]["y_pred"]
+        
+        # Calc accuracy
+        acc_value = self.acc(y_pred, y_batch)
+        train_acc_items.append(acc_value)
+        
+        if self.reduction == "mean":
+            if len(train_acc_items) > 0:
+                status["train_acc"] = sum(train_acc_items) / len(train_acc_items)
+                status["train_acc_percent"] = status["train_acc"] * 100
+        
+        elif self.reduction == "sum":
+            if len(train_acc_items) > 0 and train_count > 0:
+                status["train_acc"] = sum(train_acc_items) / train_count
+                status["train_acc_percent"] = status["train_acc"] * 100
+    
+    def on_val_iter(self, params):
+        
+        status = params["status"]
+        val_acc_items = status["val_acc_items"]
+        val_count = status["val_count"]
+        y_batch = params["iter"]["y_batch"]
+        y_pred = params["iter"]["y_pred"]
+        
+        # Calc accuracy
+        acc_value = self.acc(y_pred, y_batch)
+        val_acc_items.append(acc_value)
+        
+        if self.reduction == "mean":
+            if len(val_acc_items) > 0:
+                status["val_acc"] = sum(val_acc_items) / len(val_acc_items)
+                status["val_acc_percent"] = status["val_acc"] * 100
+        
+        elif self.reduction == "sum":
+            if len(val_acc_items) > 0 and val_count > 0:
+                status["val_acc"] = sum(val_acc_items) / val_count
+                status["val_acc_percent"] = status["val_acc"] * 100
+
+    def on_end_epoch(self, params):
+        
+        status = params["status"]
+        if not(status["train_acc"] is None) and not(status["val_acc"] is None):
+            status["rel"] = (status["train_acc"] / status["val_acc"]) if status["val_acc"] > 0 else 0
+    
+    
 class ReAccuracyCallback():
     
     def on_start_epoch(self, params):
@@ -1014,7 +1054,10 @@ class SaveCallback():
 
 class ProgressCallback():
     
-    def __init__(self, one_line=False, progress_iter=True, show_lr=True, show_acc=True):
+    def __init__(self, one_line=False,
+        progress_iter=True, show_lr=True,
+        show_acc=True, loss_precision=7
+    ):
         self.one_line = one_line
         self.progress_iter = progress_iter
         
@@ -1022,7 +1065,7 @@ class ProgressCallback():
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
             "train_acc: {train_acc_percent:.2f}%" if show_acc else "",
-            "train_loss: {train_loss:.7f}",
+            "train_loss: {train_loss:." + str(loss_precision) + "f}",
             "{t}s",
         ]
         self.progress_string_train = list(filter(lambda item: item != "", self.progress_string_train))
@@ -1032,7 +1075,7 @@ class ProgressCallback():
             "Epoch: {epoch}",
             "{iter_value:.0f}%",
             "val_acc: {val_acc_percent:.2f}%" if show_acc else "",
-            "val_loss: {val_loss:.7f}",
+            "val_loss: {val_loss:." + str(loss_precision) + "f}",
             "{t}s",
         ]
         self.progress_string_val = list(filter(lambda item: item != "", self.progress_string_val))
@@ -1043,8 +1086,8 @@ class ProgressCallback():
             "train_acc: {train_acc_percent:.2f}%" if show_acc else "",
             "val_acc: {val_acc_percent:.2f}%" if show_acc else "",
             "rel: {rel:.3f}" if show_acc else "",
-            "train_loss: {train_loss:.7f}",
-            "val_loss: {val_loss:.7f}",
+            "train_loss: {train_loss:." + str(loss_precision) + "f}",
+            "val_loss: {val_loss:." + str(loss_precision) + "f}",
             "lr: {lr_str}" if show_lr else "",
             "t: {t}s",
         ]

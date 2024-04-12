@@ -649,7 +649,7 @@ def load_model_from_file(model, file_path):
     model.load_state_dict(state_dict, strict=False)
 
 
-def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=None):
+def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=None, ignore=None):
         
     """
     Show model summary
@@ -663,50 +663,53 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
         "total_size": 0,
     }
     
-    def forward_hook(module, input, output):
+    def forward_hook(ignore_module, module_name):
         
-        output = output[0] if isinstance(output, tuple) else output
-        output_shape = "(?)"
-        if hasattr(output, "shape") and isinstance(output, torch.Tensor):
-            output_shape = output.shape
-            
-        class_name = module.__class__.__module__ + "." + module.__class__.__name__
-        layer = {
-            "name": module.__class__.__name__,
-            "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
-            "shape": output_shape,
-            "params": 0
-        }
+        def forward(module, input, output):
         
-        if layer["name"] == model_name:
-            layer["name"] = "Output"
+            output = output[0] if isinstance(output, tuple) else output
+            output_shape = "(?)"
+            if hasattr(output, "shape") and isinstance(output, torch.Tensor):
+                output_shape = output.shape
+            
+            class_name = module.__class__.__module__ + "." + module.__class__.__name__
+            layer = {
+                "module_name": module_name,
+                "name": module.__class__.__name__,
+                "class_name": module.__class__.__module__ + "." + module.__class__.__name__,
+                "shape": output_shape,
+                "ignore": ignore_module,
+                "params": 0
+            }
+            
+            if layer["name"] == model_name:
+                layer["name"] = "Output"
+            
+            # Calc parameters
+            for name, p in module.named_parameters():
+                
+                if "." in name:
+                    continue
+                
+                params = p.numel()
+                size = p.numel() * p.element_size()
+                
+                res["params_count"] += params
+                res["total_size"] += size
+                layer["params"] += params
+                
+                if p.requires_grad:
+                    res["params_train_count"] += params
+            
+            # Add output size
+            params, size = tensor_size(output)
+            #res["total_size"] += size
+            
+            # Add layer
+            layers.append(layer)
         
-        # Calc parameters
-        for name, p in module.named_parameters():
+        return forward
             
-            if "." in name:
-                continue
-            
-            params = p.numel()
-            size = p.numel() * p.element_size()
-            
-            res["params_count"] += params
-            res["total_size"] += size
-            layer["params"] += params
-            
-            if p.requires_grad:
-                res["params_train_count"] += params
-        
-        # Add output size
-        params, size = tensor_size(output)
-        #res["total_size"] += size
-        
-        # Add layer
-        layers.append(layer)
-            
-    def add_hooks(module):
-        hooks.append(module.register_forward_hook(forward_hook))
-    
     # Get batch from Dataset
     batch = None
     if isinstance(x, torch.utils.data.Dataset):
@@ -734,8 +737,10 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
             shapes.append(x[i].shape)
         #res["total_size"] += size
         layers.append({
+            "module_name": "",
             "name": "Input",
             "shape": shapes,
+            "ignore": False,
             "params": 0
         })
     
@@ -743,15 +748,34 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
         params, size = tensor_size(x)
         #res["total_size"] += size
         layers.append({
+            "module_name": "",
             "name": "Input",
             "shape": x.shape,
+            "ignore": False,
             "params": 0
         })
     
-    module.apply(add_hooks)
+    
+    # Add hook
+    def add_hook(module, name_list):
+        ignore_module = False
+        module_name = ".".join(name_list)
+        if ignore is not None:
+            for ignore_name in ignore:
+                if module_name.startswith(ignore_name):
+                    ignore_module = True
+                    break
+        keys = list(module._modules)
+        for key in keys:
+            m = module._modules[key]
+            add_hook(m, name_list + [key])
+        module.register_forward_hook(forward_hook(ignore_module, module_name))
+    
+    add_hook(module, [])
+    
     
     if hasattr(module, "step_forward"):
-        _, _, y = module.step_forward(batch, device)
+        _, y = module.step_forward(batch, device)
     
     else:
         
@@ -775,9 +799,12 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
     res['total_size'] = round(res['total_size'] / 1024 / 1024 * 100) / 100
     
     # Calc info
+    pos = 1
     values = []
     for i, layer in enumerate(layers):
         shape = layer["shape"]
+        if layer["ignore"]:
+            continue
         shape_str = ""
         if isinstance(shape, list):
             shape = [ "(" + ", ".join(map(str,s)) + ")" for s in shape ]
@@ -785,7 +812,8 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
         else:
             shape_str = "(" + ", ".join(map(str,shape)) + ")"
         
-        values.append([i + 1, layer["name"], shape_str, layer["params"]])
+        values.append([pos, layer["name"], shape_str, layer["params"]])
+        pos += 1
     
     # Print info
     info_sizes = [2, 7, 7, 5]
@@ -936,12 +964,11 @@ def fit(
                     # Set parameter gradients to zero
                     optimizer.zero_grad()
                     
-                    acc_value = None
                     loss = None
                     
                     # Forward train
                     if step_forward is not None:
-                        loss, acc_value, _ = step_forward(
+                        loss, _ = step_forward(
                             batch, device,
                             loss_fn=loss_fn, acc_fn=acc_fn
                         )
@@ -962,10 +989,6 @@ def fit(
                         else:
                             loss = loss_fn(y_pred, y_batch)
                         
-                        # Calc accuracy
-                        if acc_fn is not None:
-                            acc_value = acc_fn(y_pred, y_batch)
-                        
                         params["iter"]["x_batch"] = x_batch
                         params["iter"]["y_batch"] = y_batch
                         params["iter"]["y_pred"] = y_pred
@@ -981,9 +1004,6 @@ def fit(
                     params["status"]["train_count"] += batch_len
                     params["status"]["train_loss_items"].append( loss.item() )
                     params["status"]["t"] = round(time.time() - time_start)
-                    
-                    if acc_value is not None:
-                        params["status"]["train_acc_items"].append( acc_value )
                     
                     call_callback("on_train_iter", params)
                     
@@ -1018,12 +1038,11 @@ def fit(
                         else:
                             batch_len = len(batch["x"])
                         
-                        acc_value = None
                         loss = None
                         
                         # Forward
                         if step_forward is not None:
-                            loss, acc_value, _ = step_forward(
+                            loss, _ = step_forward(
                                 batch, device,
                                 loss_fn=loss_fn, acc_fn=acc_fn
                             )
@@ -1044,10 +1063,6 @@ def fit(
                             else:
                                 loss = loss_fn(y_pred, y_batch)
                             
-                            # Calc accuracy
-                            if acc_fn is not None:
-                                acc_value = acc_fn(y_pred, y_batch)
-                            
                             params["iter"]["x_batch"] = x_batch
                             params["iter"]["y_batch"] = y_batch
                             params["iter"]["y_pred"] = y_pred
@@ -1059,9 +1074,6 @@ def fit(
                         params["status"]["val_count"] += batch_len
                         params["status"]["val_loss_items"].append( loss.item() )
                         params["status"]["t"] = round(time.time() - time_start)
-                        
-                        if acc_value is not None:
-                            params["status"]["val_acc_items"].append( acc_value )
                         
                         call_callback("on_val_iter", params)
                         
