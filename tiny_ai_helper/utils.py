@@ -903,7 +903,6 @@ def fit(
             )
             params["val_loader"] = val_loader
     
-    acc_fn = model.acc_fn
     device = model.device
     loss_fn = model.loss
     min_lr = model.min_lr
