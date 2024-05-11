@@ -11,7 +11,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, \
-    load_json, summary, fit, get_acc_class, get_acc_binary
+    load_json, summary, fit, get_acc_class, get_acc_binary, iou_score
 
 
 class Model:
@@ -383,7 +383,9 @@ class Model:
             x = batch["x"]
             
             if hasattr(self.module, "step_forward"):
-                _, y_predict = self.module.step_forward(x, self.device)
+                _, y_predict = self.module.step_forward(x, {
+                    "model": self
+                })
             
             else:
                 x = batch_to(x, self.device)
@@ -430,7 +432,9 @@ class Model:
                     batch = batch_transform(batch, self.device)
                 
                 if hasattr(self.module, "step_forward"):
-                    _, y_predict = self.module.step_forward(batch, self.device)
+                    _, y_predict = self.module.step_forward(batch, {
+                        "model": self
+                    })
                 
                 else:
                     x_batch = batch_to(batch["x"], device)
@@ -982,7 +986,12 @@ class AccuracyCallback():
         status = params["status"]
         if not(status["train_acc"] is None) and not(status["val_acc"] is None):
             status["rel"] = (status["train_acc"] / status["val_acc"]) if status["val_acc"] > 0 else 0
-    
+
+
+class IoU(AccuracyCallback):
+    def __init__(self):
+        super().__init__(acc=iou_score, reduction="mean")
+
     
 class ReAccuracyCallback():
     

@@ -240,11 +240,11 @@ def get_default_device():
 
 def get_acc_class():
     
+    """
+    Returns class accuracy
+    """
+    
     def f(batch_predict, batch_y):
-        
-        """
-        Returns class accuracy
-        """
         
         if len(batch_y.shape) == 2:
             batch_y = torch.argmax(batch_y, dim=1)
@@ -259,6 +259,10 @@ def get_acc_class():
 
 def get_acc_binary(treshold=0.5):
     
+    """
+    Returns binary accuracy
+    """
+    
     def f(batch_predict, batch_y):
         
         batch_predict = (batch_predict >= treshold) * 1.0
@@ -270,23 +274,23 @@ def get_acc_binary(treshold=0.5):
         return acc
         
     return f
-    
+
+
+def iou_score(batch_predict, batch_y):
     
     """
-    Returns binary accuracy
+    Returns IoU
     """
     
-    from torcheval.metrics import BinaryAccuracy
-    
-    batch_predict = batch_predict.reshape(batch_predict.shape[0])
-    batch_y = batch_y.reshape(batch_y.shape[0])
-    
-    acc = BinaryAccuracy() \
-        .to(batch_predict.device) \
-        .update(batch_predict, batch_y) \
-        .compute().item()
-    
-    return round(acc * len(batch_y))
+    batch_predict = torch.sigmoid(batch_predict)
+    batch_predict = (batch_predict > 0.5).int()
+    batch_y = batch_y.int()
+
+    intersection = torch.sum(batch_predict & batch_y)
+    union = torch.sum(batch_predict | batch_y)
+
+    iou = intersection.float() / union.float()
+    return iou.item()
 
 
 def resize_image(image, new_size, contain=True, color=None):
@@ -775,7 +779,7 @@ def summary(module, x, model_name=None, device=None, batch_size=2, collate_fn=No
     
     
     if hasattr(module, "step_forward"):
-        _, y = module.step_forward(batch, device)
+        _, y = module.step_forward(batch)
     
     else:
         
@@ -960,6 +964,9 @@ def fit(
                     else:
                         batch_len = len(batch["x"])
                     
+                    if batch_transform:
+                        batch = batch_transform(batch, device)
+                    
                     # Set parameter gradients to zero
                     optimizer.zero_grad()
                     
@@ -968,15 +975,10 @@ def fit(
                     # Forward train
                     if step_forward is not None:
                         loss, _ = step_forward(
-                            batch, device,
-                            loss_fn=loss_fn, acc_fn=acc_fn
+                            batch, params=params
                         )
                     
                     else:
-                        
-                        # Data to device
-                        if batch_transform:
-                            batch = batch_transform(batch, device)
                         
                         x_batch = batch_to(batch["x"], device)
                         y_batch = batch_to(batch["y"], device)
@@ -1037,20 +1039,18 @@ def fit(
                         else:
                             batch_len = len(batch["x"])
                         
+                        if batch_transform:
+                            batch = batch_transform(batch, device)
+                        
                         loss = None
                         
                         # Forward
                         if step_forward is not None:
                             loss, _ = step_forward(
-                                batch, device,
-                                loss_fn=loss_fn, acc_fn=acc_fn
+                                batch, params=params
                             )
                             
                         else:
-                            
-                            # data to device
-                            if batch_transform:
-                                batch = batch_transform(batch, device)
                             
                             x_batch = batch_to(batch["x"], device)
                             y_batch = batch_to(batch["y"], device)
