@@ -8,7 +8,7 @@
 
 from .Model import Model, SaveCallback, ProgressCallback, \
         ReloadDatasetCallback, RandomDatasetCallback, \
-        AccuracyCallback, ReAccuracyCallback, IoU
+        AccuracyCallback, ReAccuracyCallback, F1Score, IoU
 from .utils import compile, fit
 from .csv import CSVReader
 
@@ -16,8 +16,7 @@ __version__ = "0.1.15"
 
 __all__ = (
     "Model",
-    "AccuracyCallback",
-    "IoU",
+    "AccuracyCallback", "F1Score", "IoU",
     "ProgressCallback",
     "RandomDatasetCallback",
     "ReAccuracyCallback",

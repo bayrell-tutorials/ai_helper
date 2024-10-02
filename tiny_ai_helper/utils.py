@@ -257,13 +257,16 @@ def get_acc_class():
     return f
 
 
-def get_acc_binary(treshold=0.5):
+def get_acc_binary(logits=True, treshold=0.5):
     
     """
     Returns binary accuracy
     """
     
     def f(batch_predict, batch_y):
+        
+        if logits:
+            batch_predict = torch.sigmoid(batch_predict)
         
         batch_predict = (batch_predict >= treshold) * 1.0
         acc = torch.sum( torch.eq(batch_y, batch_predict) ).item()
@@ -276,21 +279,57 @@ def get_acc_binary(treshold=0.5):
     return f
 
 
-def iou_score(batch_predict, batch_y):
+def get_iou_score(logits=True, treshold=0.5):
     
     """
     Returns IoU
     """
     
-    batch_predict = torch.sigmoid(batch_predict)
-    batch_predict = (batch_predict > 0.5).int()
-    batch_y = batch_y.int()
+    def f(batch_predict, batch_y):
+        
+        if logits:
+            batch_predict = torch.sigmoid(batch_predict)
+        
+        batch_predict = (batch_predict > treshold).int()
+        batch_y = batch_y.int()
+        
+        intersection = torch.sum(batch_predict & batch_y).item()
+        union = torch.sum(batch_predict | batch_y).item()
+        
+        iou = intersection / union if union > 0 else 0.0
+        return iou
+    
+    return f
 
-    intersection = torch.sum(batch_predict & batch_y)
-    union = torch.sum(batch_predict | batch_y)
 
-    iou = intersection.float() / union.float()
-    return iou.item()
+def get_f1_score(logits=True, treshold=0.5):
+    
+    """
+    Returns F1 Score
+    """
+    
+    def f(batch_predict, batch_y):
+        
+        if logits:
+            batch_predict = torch.sigmoid(batch_predict)
+        
+        f1_score = 0.0
+        batch_predict = (batch_predict > treshold).int()
+        batch_y = batch_y.int()
+        
+        TP = torch.sum((batch_predict == 1) & (batch_y == 1)).item()
+        FP = torch.sum((batch_predict == 1) & (batch_y == 0)).item()
+        FN = torch.sum((batch_predict == 0) & (batch_y == 1)).item()
+        
+        precision = TP / (TP + FP) if TP + FP > 0 else 0.0
+        recall = TP / (TP + FN) if TP + FP > 0 else 0.0
+        
+        if precision + recall > 0:
+            f1_score = 2 * (precision * recall) / (precision + recall)
+        
+        return f1_score
+    
+    return f
 
 
 def resize_image(image, new_size, contain=True, color=None):

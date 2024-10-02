@@ -11,7 +11,8 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from .utils import TransformDataset, list_files, \
     get_default_device, batch_to, tensor_size, \
-    load_json, summary, fit, get_acc_class, get_acc_binary, iou_score
+    load_json, summary, fit, get_acc_class, get_acc_binary, \
+    get_iou_score, get_f1_score
 
 
 class Model:
@@ -416,6 +417,7 @@ class Model:
             loader = dataset
         
         batch_transform = getattr(self.module, "batch_transform", None)
+        get_batch_size = getattr(self.module, "get_batch_size", None)
         
         with torch.no_grad():
         
@@ -443,8 +445,15 @@ class Model:
                 
                 predict(batch, y_predict, obj)
                 
+                # Batch size
+                batch_size = 1
+                if get_batch_size is not None:
+                    batch_size = get_batch_size(batch)
+                else:
+                    batch_size = len(batch["x"])
+                
                 # Show progress
-                pos = pos + len(batch['x'])
+                pos = pos + batch_size
                 if pos > next_pos:
                     next_pos = pos + 16
                     t = str(round(time.time() - time_start))
@@ -919,14 +928,17 @@ class Model:
 
 class AccuracyCallback():
     
-    def __init__(self, acc=None, binary=False, reduction="sum"):
-        self.acc = acc
+    def __init__(self, acc=None, binary=False, reduction="sum", treshold=0.5):
+        self.acc_fn = acc
         self.reduction = reduction
         if self.acc is None:
             if binary:
-                self.acc = get_acc_binary()
+                self.acc = get_acc_binary(treshold)
             else:
                 self.acc = get_acc_class()
+    
+    def acc(self, y_pred, y_batch):
+        return self.acc_fn(y_pred, y_batch)
     
     def on_start_epoch(self, params):
         status = params["status"]
@@ -989,8 +1001,13 @@ class AccuracyCallback():
 
 
 class IoU(AccuracyCallback):
-    def __init__(self):
-        super().__init__(acc=iou_score, reduction="mean")
+    def __init__(self, logits=True, treshold=0.5):
+        super().__init__(acc=get_iou_score(logits), reduction="mean")
+
+
+class F1Score(AccuracyCallback):
+    def __init__(self, logits=True, treshold=0.5):
+        super().__init__(acc=get_f1_score(logits, treshold), reduction="mean")
 
     
 class ReAccuracyCallback():
