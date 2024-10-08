@@ -931,11 +931,11 @@ class AccuracyCallback():
     def __init__(self, acc=None, binary=False, reduction="sum", treshold=0.5):
         self.acc_fn = acc
         self.reduction = reduction
-        if self.acc is None:
+        if self.acc_fn is None:
             if binary:
-                self.acc = get_acc_binary(treshold)
+                self.acc_fn = get_acc_binary(treshold)
             else:
-                self.acc = get_acc_class()
+                self.acc_fn = get_acc_class()
     
     def acc(self, y_pred, y_batch):
         return self.acc_fn(y_pred, y_batch)
