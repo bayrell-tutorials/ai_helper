@@ -25,8 +25,8 @@ class Model:
         self.optimizer = None
         self.scheduler = None
         self.loss = None
-        self.loss_reduction = 'mean'
-        self.best_metrics = ["epoch"]
+        self.loss_reduction = "mean"
+        self.best_metrics = ["val_acc", "epoch"]
         self.name = module.__class__.__name__
         self.prefix_name = ""
         self.epoch = 1
@@ -1046,7 +1046,7 @@ class ReAccuracyCallback():
 
 class SaveCallback():
     
-    def __init__(self, count=20, save_weights=True, save_train=True, save_last=False):
+    def __init__(self, count=20, save_weights=True, save_train=False, save_last=False):
         self.count = count
         self.save_weights = save_weights
         self.save_train = save_train
@@ -1058,11 +1058,11 @@ class SaveCallback():
         
         is_save = False
         
-        if self.save_weights:
+        if self.save_train:
             model.save_train_epoch()
             is_save = True
         
-        if self.save_train:
+        if self.save_weights:
             model.save_weights_epoch()
             is_save = True
         
@@ -1082,7 +1082,7 @@ class ProgressCallback():
     
     def __init__(self, one_line=False,
         progress_iter=True, show_lr=True,
-        show_acc=True, loss_precision=7
+        show_acc=True, loss_precision=4
     ):
         self.one_line = one_line
         self.progress_iter = progress_iter
