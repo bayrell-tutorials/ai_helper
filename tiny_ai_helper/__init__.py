@@ -9,6 +9,7 @@
 from .Model import Model, SaveCallback, ProgressCallback, \
         ReloadDatasetCallback, RandomDatasetCallback, \
         AccuracyCallback, ReAccuracyCallback, F1Score, IoU
+from .layers import *
 from .utils import compile, fit
 from .csv import CSVReader
 

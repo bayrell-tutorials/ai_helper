@@ -409,7 +409,7 @@ def load_image(file_name, convert=None, load_as=""):
     return image
 
 
-def draw_images(images, ncols=4, cmap=None, first_channel=False):
+def draw_images(images, ncols=4, cmap=None, first_channel=False, labels=None):
 
     import matplotlib.pyplot as plt
     
@@ -437,6 +437,8 @@ def draw_images(images, ncols=4, cmap=None, first_channel=False):
                 image = move_rgb_to_end(image)
         
         ax[i].imshow(image, cmap)
+        if labels:
+            ax[i].set_xlabel(labels[i], fontsize=8)
 
     # Скрываем лишние картинки
     for i in range(count_images, len(ax)):
