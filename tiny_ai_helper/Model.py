@@ -85,6 +85,14 @@ class Model:
     def get_epoch(self):
         return self.epoch - 1
     
+    def get_batch_size(self, batch):
+        batch_len = 1
+        get_batch_size = getattr(self.module, "get_batch_size", None)
+        if get_batch_size is not None:
+            batch_len = get_batch_size(batch)
+        else:
+            batch_len = len(batch["x"])
+        return batch_len
     
     def to(self, device):
         self.module = self.module.to(device)
@@ -143,7 +151,7 @@ class Model:
         return self
     
     
-    def load_model(self, file_path, full_path=False):
+    def load_model(self, file_path, full_path=True, epoch=None):
         
         """
         Load model from file
@@ -154,6 +162,9 @@ class Model:
         
         save_metrics = torch.load(file_path)
         self.load_state_dict(save_metrics)
+        
+        if epoch:
+            self.epoch = epoch + 1
         
         return self
         
@@ -172,6 +183,7 @@ class Model:
             file_path = os.path.join(self.model_path, file_name)
         
         self.load_model(file_path, full_path=True)
+        self.epoch = epoch + 1
         
         return self
         
